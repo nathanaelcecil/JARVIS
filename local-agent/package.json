@@ -1,0 +1,11 @@
+{
+  "name": "jarvis-local-agent",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "^1.52.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
