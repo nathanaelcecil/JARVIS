@@ -23,6 +23,7 @@ export interface AIProvider {
     messages: ChatMessage[];
     model: string;
     signal?: AbortSignal;
+    temperature?: number;
   }): Promise<{ content: string; metadata?: ResponseMetadata }>;
 
   chatStream?(params: {
@@ -101,8 +102,9 @@ export class OllamaProvider implements AIProvider {
     messages: ChatMessage[];
     model: string;
     signal?: AbortSignal;
+    temperature?: number;
   }): Promise<{ content: string; metadata?: ResponseMetadata }> {
-    const { messages, model, signal } = params;
+    const { messages, model, signal, temperature } = params;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -124,7 +126,7 @@ export class OllamaProvider implements AIProvider {
         body: JSON.stringify({
           model,
           messages,
-          temperature: 0.7,
+          temperature: temperature ?? 0.7,
           // No max_tokens cap — let the local model finish its reply.
           // (keep_alive is set via pinModelKeepAlive(); /v1 ignores it.)
         }),

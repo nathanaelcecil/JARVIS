@@ -82,7 +82,7 @@ export const MCP_REGISTRY: MCPServer[] = [
     enabled: true,
   },
 
-  // ── Gmail (read-only: gmail.readonly scope) ──
+  // ── Gmail ──
   {
     name: "gmail",
     url: "server-side",
@@ -90,17 +90,23 @@ export const MCP_REGISTRY: MCPServer[] = [
       { name: "gmail_search", description: "Search Gmail messages by query. Returns subject, from, date, snippet.", parameters: { query: { type: "string", description: "Gmail search query (same syntax as Gmail search bar)" }, maxResults: { type: "number", description: "Max results (default 10)" } } },
       { name: "gmail_read", description: "Read a specific email by message ID. Returns full subject, from, to, date, and body.", parameters: { messageId: { type: "string", description: "Gmail message ID" } } },
       { name: "gmail_list_recent", description: "List recent emails from inbox. Optionally filter by query.", parameters: { maxResults: { type: "number", description: "Max results (default 10)" }, query: { type: "string", description: "Optional Gmail query filter" } } },
+      { name: "gmail_send_email", description: "Send a new email. Confirm-tier.", parameters: { to: { type: "string", description: "Recipient email address — full address like bob@example.com, a name alone is not valid" }, subject: { type: "string", description: "Subject line" }, body: { type: "string", description: "Plain-text body" } } },
+      { name: "gmail_reply_email", description: "Reply to an email in its thread. Confirm-tier.", parameters: { messageId: { type: "string", description: "Message to reply to (id must come from gmail_search/gmail_list_recent)" }, body: { type: "string", description: "Plain-text reply body" }, to: { type: "string", description: "Override recipient as a full email address (defaults to original sender)" } } },
+      { name: "gmail_forward_email", description: "Forward an email to someone. Confirm-tier.", parameters: { messageId: { type: "string", description: "Message to forward (id must come from gmail_search/gmail_list_recent)" }, to: { type: "string", description: "Recipient email address — full address like bob@example.com, a name alone is not valid" }, note: { type: "string", description: "Optional note added above the forwarded message" } } },
     ],
     enabled: true,
   },
 
-  // ── Google Calendar (read-only: calendar.readonly scope) ──
+  // ── Google Calendar ──
   {
     name: "google-calendar",
     url: "server-side",
     tools: [
       { name: "calendar_list_events", description: "List calendar events for a time range. Defaults to today.", parameters: { timeMin: { type: "string", description: "ISO 8601 start time (default: today midnight)" }, timeMax: { type: "string", description: "ISO 8601 end time (default: tomorrow midnight)" }, maxResults: { type: "number", description: "Max events (default 20)" } } },
       { name: "calendar_search_events", description: "Search calendar events by text query.", parameters: { query: { type: "string", description: "Search text" }, timeMin: { type: "string" }, timeMax: { type: "string" } } },
+      { name: "calendar_create_event", description: "Create a calendar event (plan-and-enter: turn a natural-language plan into an event). Confirm-tier.", parameters: { summary: { type: "string", description: "Event title" }, start: { type: "string", description: "ISO 8601 start time" }, end: { type: "string", description: "ISO 8601 end time (default: start + 30 min)" }, description: { type: "string" }, location: { type: "string" }, timeZone: { type: "string", description: "IANA time zone, e.g. Asia/Kolkata" } } },
+      { name: "calendar_update_event", description: "Update fields of an existing event — only provided fields change. Confirm-tier.", parameters: { eventId: { type: "string", description: "Event id (must come from calendar_list_events/calendar_search_events)" }, summary: { type: "string" }, start: { type: "string", description: "ISO 8601" }, end: { type: "string", description: "ISO 8601" }, description: { type: "string" }, location: { type: "string" }, timeZone: { type: "string" } } },
+      { name: "calendar_delete_event", description: "Delete a calendar event permanently. Confirm-tier.", parameters: { eventId: { type: "string", description: "Event id (must come from calendar_list_events/calendar_search_events)" } } },
     ],
     enabled: true,
   },
@@ -127,6 +133,7 @@ export const MCP_REGISTRY: MCPServer[] = [
       { name: "notion_read_page", description: "Read a Notion page's content as text.", parameters: { pageId: { type: "string", description: "Notion page ID" } } },
       { name: "notion_query_database", description: "Query a Notion database with optional filters.", parameters: { databaseId: { type: "string", description: "Database ID" }, filter: { type: "object", description: "Optional Notion filter object" }, pageSize: { type: "number" } } },
       { name: "notion_create_page", description: "Create a new page in a Notion database or as child of a page. Confirm-tier.", parameters: { parent: { type: "object", description: "{ database_id } or { page_id }" }, properties: { type: "object", description: "Page properties" }, children: { type: "array", description: "Optional initial content blocks" } } },
+      { name: "notion_append_blocks", description: "Append content blocks to the bottom of an existing Notion page. Confirm-tier.", parameters: { pageId: { type: "string", description: "Notion page ID or page title" }, content: { type: "string", description: "Plain text, one block per line (\"# \" heading, \"- \" bullet)" }, children: { type: "array", description: "Optional raw Notion blocks (overrides content)" } } },
       { name: "notion_update_page", description: "Update an existing Notion page's properties. Confirm-tier.", parameters: { pageId: { type: "string" }, properties: { type: "object", description: "Properties to update" } } },
       { name: "notion_archive_page", description: "Archive (soft-delete) a Notion page. Confirm-tier. Recoverable via Notion UI.", parameters: { pageId: { type: "string" } } },
     ],
@@ -150,7 +157,7 @@ const SERVER_DISPATCH: Record<
   string,
   (args: Record<string, unknown>) => Promise<unknown>
 > = {
-  // Gmail (read-only scope)
+  // Gmail
   gmail_search: async (a) => {
     const { gmailSearch } = await import("../../functions/gmail");
     return gmailSearch(a as { query: string; maxResults?: number });
@@ -162,6 +169,18 @@ const SERVER_DISPATCH: Record<
   gmail_list_recent: async (a) => {
     const { gmailListRecent } = await import("../../functions/gmail");
     return gmailListRecent(a as { maxResults?: number; query?: string });
+  },
+  gmail_send_email: async (a) => {
+    const { gmailSendEmail } = await import("../../functions/gmail");
+    return gmailSendEmail(a as { to: string; subject: string; body: string });
+  },
+  gmail_reply_email: async (a) => {
+    const { gmailReplyEmail } = await import("../../functions/gmail");
+    return gmailReplyEmail(a as { messageId: string; body: string; to?: string });
+  },
+  gmail_forward_email: async (a) => {
+    const { gmailForwardEmail } = await import("../../functions/gmail");
+    return gmailForwardEmail(a as { messageId: string; to: string; note?: string });
   },
 
   // Google Calendar
@@ -176,6 +195,22 @@ const SERVER_DISPATCH: Record<
     return calendarSearchEvents(
       a as { query: string; timeMin?: string; timeMax?: string }
     );
+  },
+  calendar_create_event: async (a) => {
+    const { calendarCreateEvent } = await import("../../functions/google-calendar");
+    return calendarCreateEvent(
+      a as { summary: string; start: string; end?: string; description?: string; location?: string; timeZone?: string }
+    );
+  },
+  calendar_update_event: async (a) => {
+    const { calendarUpdateEvent } = await import("../../functions/google-calendar");
+    return calendarUpdateEvent(
+      a as { eventId: string; summary?: string; start?: string; end?: string; description?: string; location?: string; timeZone?: string }
+    );
+  },
+  calendar_delete_event: async (a) => {
+    const { calendarDeleteEvent } = await import("../../functions/google-calendar");
+    return calendarDeleteEvent(a as { eventId: string });
   },
 
   // Notion
@@ -201,6 +236,12 @@ const SERVER_DISPATCH: Record<
         properties: Record<string, unknown>;
         children?: Array<Record<string, unknown>>;
       }
+    );
+  },
+  notion_append_blocks: async (a) => {
+    const { notionAppendBlocks } = await import("../../functions/notion");
+    return notionAppendBlocks(
+      a as { pageId: string; content?: string; children?: Array<Record<string, unknown>> }
     );
   },
   notion_update_page: async (a) => {

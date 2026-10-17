@@ -8,12 +8,20 @@ import { saveGoogleTokens, loadGoogleTokens, hasValidGoogleTokens } from '../lib
 
 const GOOGLE_CLIENT_ID = process.env['GOOGLE_CLIENT_ID'] ?? '';
 const GOOGLE_CLIENT_SECRET = process.env['GOOGLE_CLIENT_SECRET'] ?? '';
-const REDIRECT_URI = 'https://tanstack-start-ts.nathanaelcecil.workers.dev/api/auth/google/callback';
+const REDIRECT_URI = process.env['GOOGLE_REDIRECT_URI'] ?? 'http://localhost:3000/api/auth/google/callback';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.events',
 ].join(' ');
+
+/** Human-facing URL to (re)connect Google — derived from the redirect URI. */
+const AUTH_URL_PATH = REDIRECT_URI.replace(
+  /\/api\/auth\/google\/callback.*$/,
+  '/api/auth/google'
+);
 
 /**
  * Generate the Google OAuth authorization URL.
@@ -129,9 +137,23 @@ export async function refreshGoogleToken(): Promise<string> {
 /**
  * Get a valid access token, refreshing if needed.
  */
-export async function getValidAccessToken(): Promise<string> {
+export async function getValidAccessToken(requiredScopes?: string[]): Promise<string> {
   const tokens = await loadGoogleTokens();
-  if (!tokens) throw new Error('Not authenticated with Google. Visit /api/auth/google to connect.');
+  if (!tokens) throw new Error('Not authenticated with Google. Visit ' + AUTH_URL_PATH + ' to connect.');
+
+  // Writes need scopes the stored token may predate (grants are immutable
+  // until re-consent) — fail with an actionable message, never a raw 403.
+  if (requiredScopes?.length) {
+    const granted = tokens.scope ?? '';
+    const missing = requiredScopes.filter((sc) => !granted.includes(sc));
+    if (missing.length > 0) {
+      throw new Error(
+        'JARVIS needs new Google permissions (send email / manage calendar events). Visit ' +
+          AUTH_URL_PATH +
+          ' once to re-approve, then retry.'
+      );
+    }
+  }
 
   // Check if token is still valid (5-minute buffer)
   if (tokens.expiryDate > Date.now() + 5 * 60 * 1000) {

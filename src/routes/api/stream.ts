@@ -28,6 +28,17 @@ import {
 import { routeToolCall } from "../../lib/mcp/registry";
 import { registerConfirmation } from "./confirm";
 import {
+  DATA_TOOLS,
+  NO_DATA_NOTE,
+  buildToolContext,
+  deterministicPlan,
+  hasUnplannedServices,
+  looksLikeDataRequest,
+  planTools,
+  type PlannedTool,
+  type ToolRun,
+} from "../../lib/ai/data-tools";
+import {
   getCachedMemories,
   setCachedMemories,
   invalidateMemories,
@@ -256,18 +267,25 @@ function toolPermissionCategory(toolName: string): string {
     browser_type: "browser.type",
     browser_fill_form: "browser.fill_form",
     browser_download: "browser.download",
-    // Gmail (read-only)
+    // Gmail
     gmail_search: "gmail.gmail_search",
     gmail_read: "gmail.gmail_read",
     gmail_list_recent: "gmail.gmail_list_recent",
-    // Calendar (read-only)
+    gmail_send_email: "gmail.gmail_send_email",
+    gmail_reply_email: "gmail.gmail_reply_email",
+    gmail_forward_email: "gmail.gmail_forward_email",
+    // Calendar
     calendar_list_events: "calendar.calendar_list_events",
     calendar_search_events: "calendar.calendar_search_events",
+    calendar_create_event: "calendar.calendar_create_event",
+    calendar_update_event: "calendar.calendar_update_event",
+    calendar_delete_event: "calendar.calendar_delete_event",
     // Notion
     notion_search: "notion.notion_search",
     notion_read_page: "notion.notion_read_page",
     notion_query_database: "notion.notion_query_database",
     notion_create_page: "notion.notion_create_page",
+    notion_append_blocks: "notion.notion_append_blocks",
     notion_update_page: "notion.notion_update_page",
     notion_archive_page: "notion.notion_archive_page",
     // Proactive JARVIS
@@ -428,17 +446,20 @@ export const Route = createFileRoute("/api/stream")({
                         confirmId,
                       })
                     );
-                    const approved = await registerConfirmation({
+                    const decision = await registerConfirmation({
                       tool: fastPath.tool,
                       args: fastPath.args,
                       confirmId,
                     });
-                    if (!approved) {
+                    if (decision !== "approved") {
                       write(
                         sseEvent("done", {
                           taskId: task.id,
                           route: "FAST",
-                          text: "Action denied.",
+                          text:
+                            decision === "expired"
+                              ? `Confirmation timed out after 3 minutes: ${fastPath.tool} — nothing was executed. Ask me again to retry.`
+                              : "Action denied.",
                           error: true,
                         })
                       );
@@ -711,6 +732,174 @@ export const Route = createFileRoute("/api/stream")({
                   }
                 };
 
+                // ── Data-tool pre-pass (Gmail / Calendar / Notion) ──
+                // These tools return data, so they must run BEFORE the model
+                // writes its answer — otherwise it can only guess. Results are
+                // appended to the user's message as authoritative context.
+                const preRuns: ToolRun[] = [];
+
+                const execDataTool = async (
+                  tc: PlannedTool
+                ): Promise<unknown> => {
+                  const { allowed, permission } = checkPermission(
+                    toolPermissionCategory(tc.tool)
+                  );
+                  if (!allowed) {
+                    const blockMsg = `Tool blocked by security policy: ${tc.tool} (tier: ${permission})`;
+                    console.warn(`[DataTools] BLOCKED: ${tc.tool}`);
+                    write(
+                      sseEvent("tool_result", {
+                        tool: tc.tool,
+                        result: { error: blockMsg, blocked: true },
+                      })
+                    );
+                    return { error: blockMsg, blocked: true };
+                  }
+
+                  if (permission === "confirm") {
+                    const confirmId = crypto.randomUUID().slice(0, 8);
+                    write(
+                      sseEvent("confirm_request", {
+                        tool: tc.tool,
+                        args: tc.args,
+                        confirmId,
+                      })
+                    );
+                    const decision = await registerConfirmation({
+                      tool: tc.tool,
+                      args: tc.args,
+                      confirmId,
+                    });
+                    if (decision !== "approved") {
+                      const denyMsg =
+                        decision === "expired"
+                          ? `Confirmation timed out after 3 minutes: ${tc.tool} — nothing was executed. Ask me again to retry.`
+                          : `Action denied by user: ${tc.tool}`;
+                      console.log(`[DataTools] ${decision.toUpperCase()}: ${tc.tool}`);
+                      write(
+                        sseEvent("tool_result", {
+                          tool: tc.tool,
+                          result: { error: denyMsg, denied: true },
+                        })
+                      );
+                      logActivity({
+                        toolName: tc.tool,
+                        input: tc.args,
+                        result: { error: denyMsg },
+                        approvalStatus: decision,
+                      }).catch(() => {});
+                      return { error: denyMsg, denied: true };
+                    }
+                  }
+
+                  try {
+                    console.log(
+                      `[DataTools] Executing: ${tc.tool}`,
+                      JSON.stringify(tc.args).slice(0, 200)
+                    );
+                    write(sseEvent("tool_start", { tool: tc.tool }));
+                    const result = await routeToolCall(tc.tool, tc.args, signal);
+                    console.log(`[DataTools] ${tc.tool} → success`);
+                    write(sseEvent("tool_result", { tool: tc.tool, result }));
+                    logActivity({
+                      toolName: tc.tool,
+                      input: tc.args,
+                      result: result as Record<string, unknown>,
+                      approvalStatus: permission,
+                    }).catch(() => {});
+                    return result;
+                  } catch (toolErr) {
+                    const errMsg =
+                      toolErr instanceof Error
+                        ? toolErr.message
+                        : String(toolErr);
+                    console.error(`[DataTools] ${tc.tool} FAILED:`, errMsg);
+                    write(
+                      sseEvent("tool_result", {
+                        tool: tc.tool,
+                        result: { error: errMsg },
+                      })
+                    );
+                    logActivity({
+                      toolName: tc.tool,
+                      input: tc.args,
+                      result: { error: errMsg },
+                      approvalStatus: "failed",
+                    }).catch(() => {});
+                    return { error: errMsg };
+                  }
+                };
+
+                if (imageList.length === 0) {
+                  const recentHistory = history
+                    .slice(-4)
+                    .map((m) => `${m.role}: ${String(m.content).slice(0, 400)}`)
+                    .join("\n");
+                  // Follow-ups like "add an intro below these lines on the
+                  // same page" never repeat the keyword — treat a recent
+                  // data-flavored conversation as data intent too.
+                  const messageIntent = looksLikeDataRequest(message);
+                  const dataIntent =
+                    messageIntent || looksLikeDataRequest(recentHistory);
+                  try {
+                    let plan: PlannedTool[] = deterministicPlan(message);
+                    const usedRules = plan.length > 0;
+                    if (!usedRules && dataIntent) {
+                      plan = await planTools({
+                        provider,
+                        model: routeResult.model,
+                        message,
+                        recentHistory,
+                        runs: preRuns,
+                        signal,
+                      });
+                    }
+                    for (
+                      let round = 0;
+                      round < 3 && plan.length > 0 && !signal.aborted;
+                      round++
+                    ) {
+                      for (const tc of plan) {
+                        if (signal.aborted) break;
+                        preRuns.push({ ...tc, result: await execDataTool(tc) });
+                      }
+                      if (round === 2) break;
+                      // Trust the rules only once every service the message
+                      // named has actually run — otherwise keep planning so
+                      // tail services (calendar in a "mail and calendar" ask)
+                      // are not silently dropped.
+                      if (usedRules && !hasUnplannedServices(message, preRuns)) {
+                        break;
+                      }
+                      plan = await planTools({
+                        provider,
+                        model: routeResult.model,
+                        message,
+                        recentHistory,
+                        runs: preRuns,
+                        signal,
+                      });
+                    }
+                  } catch (planErr) {
+                    console.error("[DataTools] pre-pass failed:", planErr);
+                  }
+
+                  // Hand the real results (or an explicit "nothing fetched"
+                  // note) to the answering model via the user's message.
+                  const toolContext =
+                    preRuns.length > 0
+                      ? buildToolContext(preRuns)
+                      : messageIntent
+                        ? NO_DATA_NOTE
+                        : "";
+                  if (toolContext) {
+                    const last = messages[messages.length - 1];
+                    if (last && last.role === "user" && typeof last.content === "string") {
+                      last.content = last.content + toolContext;
+                    }
+                  }
+                }
+
                 if (provider.chatStream) {
                   const streamGen = provider.chatStream({
                     messages,
@@ -815,7 +1004,7 @@ export const Route = createFileRoute("/api/stream")({
                 updateTaskStatus(task.id, "COMPLETED");
 
                 // ── Execute tool calls from metadata ──
-                const toolCalls = (
+                const rawToolCalls = (
                   metadata as {
                     tools?: Array<{
                       tool: string;
@@ -823,6 +1012,11 @@ export const Route = createFileRoute("/api/stream")({
                     }>;
                   }
                 )?.tools;
+                // Data tools already ran in the pre-pass — don't run them twice.
+                const toolCalls =
+                  rawToolCalls && preRuns.length > 0
+                    ? rawToolCalls.filter((tc) => !DATA_TOOLS.has(tc.tool))
+                    : rawToolCalls;
                 const toolResults: Array<{
                   tool: string;
                   result: unknown;
@@ -877,14 +1071,17 @@ export const Route = createFileRoute("/api/stream")({
                         })
                       );
 
-                      const approved = await registerConfirmation({
+                      const decision = await registerConfirmation({
                         tool: tc.tool,
                         args: tc.args,
                         confirmId,
                       });
-                      if (!approved) {
-                        const denyMsg = `Action denied by user: ${tc.tool}`;
-                        console.log(`[Tool] DENIED: ${tc.tool}`);
+                      if (decision !== "approved") {
+                        const denyMsg =
+                          decision === "expired"
+                            ? `Confirmation timed out after 3 minutes: ${tc.tool} — nothing was executed. Ask me again to retry.`
+                            : `Action denied by user: ${tc.tool}`;
+                        console.log(`[Tool] ${decision.toUpperCase()}: ${tc.tool}`);
                         toolResults.push({
                           tool: tc.tool,
                           result: { error: denyMsg, denied: true },
@@ -899,7 +1096,7 @@ export const Route = createFileRoute("/api/stream")({
                           toolName: tc.tool,
                           input: tc.args,
                           result: { error: denyMsg },
-                          approvalStatus: "denied",
+                          approvalStatus: decision,
                         }).catch(() => {});
                         continue;
                       }

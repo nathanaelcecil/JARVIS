@@ -225,11 +225,15 @@ function Index() {
   const handleConfirm = useCallback(async (approved: boolean) => {
     if (!pendingConfirm) return;
     try {
-      await fetch("/api/confirm", {
+      const res = await fetch("/api/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmId: pendingConfirm.confirmId, approved }),
       });
+      if (!res.ok) {
+        // The server already resolved/expired this prompt — the click was late.
+        console.warn("[Confirm] Decision not accepted (expired):", res.status);
+      }
     } catch (err) {
       console.error("[Confirm] Failed to send decision:", err);
     }
@@ -568,6 +572,10 @@ function Index() {
                   streamedRoute = parsed.route || "";
                   setCurrentRoute(streamedRoute);
                   setCurrentTaskId(parsed.taskId || "");
+                  // Any confirm dialog still open belongs to a request the
+                  // server has already resolved or expired — close it so a
+                  // late click can't be mistaken for a denial.
+                  setPendingConfirm(null);
 
                   // Final-flush audit: adopt the server's full text if any
                   // tokens were missed client-side (dropped chunk / reconnect)

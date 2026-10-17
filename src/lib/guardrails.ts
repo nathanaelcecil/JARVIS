@@ -61,26 +61,31 @@ const PERMISSIONS: Record<string, Permission> = {
   "github.create_comment": "confirm",
 
   // External state modification: CONFIRM
-  // Gmail — read-only (gmail.readonly scope)
+  // Gmail — reads auto, writes confirm
   "gmail.gmail_search": "auto",
   "gmail.gmail_read": "auto",
   "gmail.gmail_list_recent": "auto",
+  "gmail.gmail_send_email": "confirm",
+  "gmail.gmail_reply_email": "confirm",
+  "gmail.gmail_forward_email": "confirm",
 
-  // Google Calendar — read-only (calendar.readonly scope)
+  // Google Calendar — reads auto, writes confirm
   "calendar.calendar_list_events": "auto",
   "calendar.calendar_search_events": "auto",
+  "calendar.calendar_create_event": "confirm",
+  "calendar.calendar_update_event": "confirm",
+  "calendar.calendar_delete_event": "confirm",
 
   // Notion — read-only = auto, write = confirm
   "notion.notion_search": "auto",
   "notion.notion_read_page": "auto",
   "notion.notion_query_database": "auto",
   "notion.notion_create_page": "confirm",
+  "notion.notion_append_blocks": "confirm",
   "notion.notion_update_page": "confirm",
   "notion.notion_archive_page": "confirm",
 
   // External state modification: CONFIRM
-  "email.send": "confirm",
-  "calendar.create": "confirm",
   "slack.post": "confirm",
   "notion.create": "confirm",
   "memory.write": "confirm",

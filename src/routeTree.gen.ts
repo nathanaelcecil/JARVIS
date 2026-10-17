@@ -14,6 +14,8 @@ import { Route as ApiConfirmRouteImport } from './routes/api/confirm'
 import { Route as ApiProactiveRouteImport } from './routes/api/proactive'
 import { Route as ApiStreamRouteImport } from './routes/api/stream'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
+import { Route as ApiAuthGoogleRouteImport } from './routes/api/auth/google'
+import { Route as ApiAuthGoogleCallbackRouteImport } from './routes/api/auth/google/callback'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +42,16 @@ const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
   path: '/api/transcribe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthGoogleRoute = ApiAuthGoogleRouteImport.update({
+  id: '/api/auth/google',
+  path: '/api/auth/google',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthGoogleCallbackRoute = ApiAuthGoogleCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => ApiAuthGoogleRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +59,8 @@ export interface FileRoutesByFullPath {
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
   '/api/transcribe': typeof ApiTranscribeRoute
+  '/api/auth/google': typeof ApiAuthGoogleRouteWithChildren
+  '/api/auth/google/callback': typeof ApiAuthGoogleCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +68,8 @@ export interface FileRoutesByTo {
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
   '/api/transcribe': typeof ApiTranscribeRoute
+  '/api/auth/google': typeof ApiAuthGoogleRouteWithChildren
+  '/api/auth/google/callback': typeof ApiAuthGoogleCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,14 +78,28 @@ export interface FileRoutesById {
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
   '/api/transcribe': typeof ApiTranscribeRoute
+  '/api/auth/google': typeof ApiAuthGoogleRouteWithChildren
+  '/api/auth/google/callback': typeof ApiAuthGoogleCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/api/confirm' | '/api/proactive' | '/api/stream' | '/api/transcribe'
+    | '/'
+    | '/api/confirm'
+    | '/api/proactive'
+    | '/api/stream'
+    | '/api/transcribe'
+    | '/api/auth/google'
+    | '/api/auth/google/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/api/confirm' | '/api/proactive' | '/api/stream' | '/api/transcribe'
+    | '/'
+    | '/api/confirm'
+    | '/api/proactive'
+    | '/api/stream'
+    | '/api/transcribe'
+    | '/api/auth/google'
+    | '/api/auth/google/callback'
   id:
     | '__root__'
     | '/'
@@ -77,6 +107,8 @@ export interface FileRouteTypes {
     | '/api/proactive'
     | '/api/stream'
     | '/api/transcribe'
+    | '/api/auth/google'
+    | '/api/auth/google/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -85,6 +117,7 @@ export interface RootRouteChildren {
   ApiProactiveRoute: typeof ApiProactiveRoute
   ApiStreamRoute: typeof ApiStreamRoute
   ApiTranscribeRoute: typeof ApiTranscribeRoute
+  ApiAuthGoogleRoute: typeof ApiAuthGoogleRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -124,8 +157,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTranscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/google': {
+      id: '/api/auth/google'
+      path: '/api/auth/google'
+      fullPath: '/api/auth/google'
+      preLoaderRoute: typeof ApiAuthGoogleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/google/callback': {
+      id: '/api/auth/google/callback'
+      path: '/callback'
+      fullPath: '/api/auth/google/callback'
+      preLoaderRoute: typeof ApiAuthGoogleCallbackRouteImport
+      parentRoute: typeof ApiAuthGoogleRoute
+    }
   }
 }
+
+interface ApiAuthGoogleRouteChildren {
+  ApiAuthGoogleCallbackRoute: typeof ApiAuthGoogleCallbackRoute
+}
+
+const ApiAuthGoogleRouteChildren: ApiAuthGoogleRouteChildren = {
+  ApiAuthGoogleCallbackRoute: ApiAuthGoogleCallbackRoute,
+}
+
+const ApiAuthGoogleRouteWithChildren = ApiAuthGoogleRoute._addFileChildren(
+  ApiAuthGoogleRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -133,6 +192,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProactiveRoute: ApiProactiveRoute,
   ApiStreamRoute: ApiStreamRoute,
   ApiTranscribeRoute: ApiTranscribeRoute,
+  ApiAuthGoogleRoute: ApiAuthGoogleRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
