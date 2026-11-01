@@ -87,9 +87,7 @@ describe("resolveWorkspacePath", () => {
     const head = await resolveWorkspacePath(policy, ".git/HEAD");
     expect(head).toBe(path.join(root, ".git", "HEAD"));
     // … but writes inside .git are refused as a dependency/VCS directory.
-    await expect(resolveWorkspacePath(policy, ".git/HEAD", "write")).rejects.toThrow(
-      /dependency/,
-    );
+    await expect(resolveWorkspacePath(policy, ".git/HEAD", "write")).rejects.toThrow(/dependency/);
   });
 
   it("rejects NUL bytes and empty paths", async () => {

@@ -18,28 +18,28 @@ type Classification = "confirm" | "never";
 
 /** Patterns that are NEVER allowed — destructive or credential-touching */
 const NEVER_PATTERNS: RegExp[] = [
-  /\brm\s+(-[rRf]+\s+|--recursive)/,           // rm -rf, rm -R
-  /\brm\s+-[f].*\//,                            // rm -f /something
-  /\bgit\s+push\s+.*--force/,                   // git push --force
-  /\bgit\s+push\s+.*-f\b/,                      // git push -f
-  /\bgit\s+reset\s+--hard/,                     // git reset --hard
-  /\bgit\s+clean\s+-[fd]+/,                     // git clean -fd
-  /\bgit\s+branch\s+-D/,                        // git branch -D (force delete)
-  /\bmkfs\b/,                                   // format disk
-  /\bdd\s+.*of=\/dev\//,                        // dd to device
-  /\bchmod\s+(-R\s+)?777\b/,                    // chmod 777
-  /\bsudo\b/,                                   // any sudo
-  /\bsu\s+-/,                                   // su -
-  /\bkill\s+-9\s+1\b/,                          // kill -9 PID 1
-  /\bshutdown\b/,                               // shutdown
-  /\breboot\b/,                                 // reboot
-  /\bhwctl\b.*--reboot/,                        // hwctl reboot
-  /\/etc\/passwd/,                              // touching passwd
-  /\/etc\/shadow/,                              // touching shadow
-  /\.env(\..*)?$/,                              // any .env file
-  /\bcredentials?\b.*\bwrite\b/i,               // writing credentials
+  /\brm\s+(-[rRf]+\s+|--recursive)/, // rm -rf, rm -R
+  /\brm\s+-[f].*\//, // rm -f /something
+  /\bgit\s+push\s+.*--force/, // git push --force
+  /\bgit\s+push\s+.*-f\b/, // git push -f
+  /\bgit\s+reset\s+--hard/, // git reset --hard
+  /\bgit\s+clean\s+-[fd]+/, // git clean -fd
+  /\bgit\s+branch\s+-D/, // git branch -D (force delete)
+  /\bmkfs\b/, // format disk
+  /\bdd\s+.*of=\/dev\//, // dd to device
+  /\bchmod\s+(-R\s+)?777\b/, // chmod 777
+  /\bsudo\b/, // any sudo
+  /\bsu\s+-/, // su -
+  /\bkill\s+-9\s+1\b/, // kill -9 PID 1
+  /\bshutdown\b/, // shutdown
+  /\breboot\b/, // reboot
+  /\bhwctl\b.*--reboot/, // hwctl reboot
+  /\/etc\/passwd/, // touching passwd
+  /\/etc\/shadow/, // touching shadow
+  /\.env(\..*)?$/, // any .env file
+  /\bcredentials?\b.*\bwrite\b/i, // writing credentials
   /\bcurl\b.*\b(Bearer|token|password|secret)\b/i, // curling with secrets
-  /\bwget\b.*\b(password|token|secret)\b/i,     // wget with secrets
+  /\bwget\b.*\b(password|token|secret)\b/i, // wget with secrets
   // Local JARVIS secrets — reading or copying them is never allowed.
   /\.agent-secret\b/, // local-agent bearer secret
   /\.approval-key\b/, // local-agent approval key
@@ -82,9 +82,9 @@ function classifyCommand(command: string): { classification: Classification; rea
 
 // ── Execution ───────────────────────────────────────────────
 
-const DEFAULT_TIMEOUT_MS = 30_000;   // 30s default
-const MAX_TIMEOUT_MS = 300_000;      // 5min max
-const SIGKILL_GRACE_MS = 3_000;      // 3s between SIGTERM and SIGKILL
+const DEFAULT_TIMEOUT_MS = 30_000; // 30s default
+const MAX_TIMEOUT_MS = 300_000; // 5min max
+const SIGKILL_GRACE_MS = 3_000; // 3s between SIGTERM and SIGKILL
 
 export interface RunCommandResult {
   success: boolean;
@@ -167,13 +167,21 @@ export function runCommand(args: {
     const timeoutId = setTimeout(() => {
       timedOut = true;
       // SIGTERM first
-      try { child.kill("SIGTERM"); } catch { /* ignore */ }
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* ignore */
+      }
 
       // SIGKILL after grace period
       setTimeout(() => {
         if (!child.killed) {
           killed = true;
-          try { child.kill("SIGKILL"); } catch { /* ignore */ }
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            /* ignore */
+          }
         }
       }, SIGKILL_GRACE_MS);
     }, timeout);
@@ -183,10 +191,18 @@ export function runCommand(args: {
       if (signal?.aborted) {
         timedOut = true;
         killed = true;
-        try { child.kill("SIGTERM"); } catch { /* ignore */ }
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          /* ignore */
+        }
         setTimeout(() => {
           if (!child.killed) {
-            try { child.kill("SIGKILL"); } catch { /* ignore */ }
+            try {
+              child.kill("SIGKILL");
+            } catch {
+              /* ignore */
+            }
           }
         }, SIGKILL_GRACE_MS);
       }

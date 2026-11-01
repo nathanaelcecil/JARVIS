@@ -111,9 +111,17 @@ export async function browserExtract(args: {
     const text = await page.evaluate(() => {
       const clone = document.body.cloneNode(true) as HTMLElement;
       const removeSelectors = [
-        "script", "style", "nav", "footer", "header",
-        "noscript", "iframe", "svg",
-        "[role=navigation]", "[role=banner]", "[role=contentinfo]",
+        "script",
+        "style",
+        "nav",
+        "footer",
+        "header",
+        "noscript",
+        "iframe",
+        "svg",
+        "[role=navigation]",
+        "[role=banner]",
+        "[role=contentinfo]",
       ];
       for (const sel of removeSelectors) {
         clone.querySelectorAll(sel).forEach((el) => el.remove());
@@ -282,11 +290,8 @@ export async function browserFillForm(args: {
         type: (el as HTMLInputElement).type || "",
       }));
 
-      const sensitive = ["password", "credit", "card", "ssn", "social"].some(
-        (s) =>
-          `${fieldInfo.name} ${fieldInfo.placeholder} ${fieldInfo.type}`
-            .toLowerCase()
-            .includes(s)
+      const sensitive = ["password", "credit", "card", "ssn", "social"].some((s) =>
+        `${fieldInfo.name} ${fieldInfo.placeholder} ${fieldInfo.type}`.toLowerCase().includes(s),
       );
       if (sensitive) {
         return {

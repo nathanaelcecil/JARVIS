@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "bun scripts/verify.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"

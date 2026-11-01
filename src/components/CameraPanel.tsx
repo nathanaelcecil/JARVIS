@@ -65,13 +65,8 @@ export function CameraPanel({ active, onClose, onCapture }: CameraPanelProps) {
   return (
     <div className="absolute bottom-24 right-4 z-20 border border-hud-edge/60 bg-black/80 backdrop-blur-sm">
       <div className="flex items-center justify-between px-2 py-1 border-b border-hud-line/30">
-        <span className="hud-mono text-[9px] tracking-wider text-hud-dim">
-          CAMERA FEED
-        </span>
-        <button
-          onClick={onClose}
-          className="text-hud-dim hover:text-hud transition-colors"
-        >
+        <span className="hud-mono text-[9px] tracking-wider text-hud-dim">CAMERA FEED</span>
+        <button onClick={onClose} className="text-hud-dim hover:text-hud transition-colors">
           <X size={12} />
         </button>
       </div>
@@ -86,9 +81,7 @@ export function CameraPanel({ active, onClose, onCapture }: CameraPanelProps) {
         <canvas ref={canvasRef} className="hidden" />
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-            <p className="hud-mono text-[9px] text-hud-dim px-2 text-center">
-              {error}
-            </p>
+            <p className="hud-mono text-[9px] text-hud-dim px-2 text-center">{error}</p>
           </div>
         )}
       </div>

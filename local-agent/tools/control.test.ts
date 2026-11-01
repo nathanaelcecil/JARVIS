@@ -71,7 +71,9 @@ describe("native/jarvis-hands-control is the only acting surface", () => {
       const start = code.indexOf(`func ${command}`);
       expect(start, `${command} must exist`).toBeGreaterThan(-1);
       const body = code.slice(start, start + 2500);
-      expect(body, `${command} must call requireAccessibility()`).toContain("requireAccessibility()");
+      expect(body, `${command} must call requireAccessibility()`).toContain(
+        "requireAccessibility()",
+      );
     }
   });
 
@@ -200,15 +202,7 @@ describe("control runner", () => {
         string,
         unknown
       >;
-      expect(place["argv"]).toEqual([
-        "place",
-        "--pid",
-        "7",
-        "--where",
-        "left",
-        "--screen",
-        "1",
-      ]);
+      expect(place["argv"]).toEqual(["place", "--pid", "7", "--where", "left", "--screen", "1"]);
     } finally {
       if (previous === undefined) delete process.env[CONTROL_BIN_ENV];
       else process.env[CONTROL_BIN_ENV] = previous;
@@ -259,9 +253,9 @@ describe("control arguments are validated before a process is spawned", () => {
     expect(validateToolArgs("control_key", { combo: "cmd + ; rm -rf /" }).ok).toBe(false);
     expect(validateToolArgs("control_key", { combo: "" }).ok).toBe(false);
     expect(validateToolArgs("control_menu", { pid: 1, path: "File>>Export" }).ok).toBe(false);
-    expect(validateToolArgs("control_menu", { pid: 1, path: "File>Export>PDF>More>Still>Deep>X" }).ok).toBe(
-      false,
-    );
+    expect(
+      validateToolArgs("control_menu", { pid: 1, path: "File>Export>PDF>More>Still>Deep>X" }).ok,
+    ).toBe(false);
     expect(validateToolArgs("control_place", { pid: 1, where: "sideways" }).ok).toBe(false);
     expect(validateToolArgs("control_type", { text: "x".repeat(4001) }).ok).toBe(false);
   });
@@ -358,8 +352,13 @@ describe("the local agent refuses control without a real approval", () => {
     });
     // 403 (not 401): the bearer is fine, the approval is not.
     expect(
-      (await call({ tool: "control_click", args: { pid: 42, label: "Save" }, approvalToken: otherTool }))
-        .status,
+      (
+        await call({
+          tool: "control_click",
+          args: { pid: 42, label: "Save" },
+          approvalToken: otherTool,
+        })
+      ).status,
     ).toBe(403);
 
     const otherArgs = mintApprovalToken({

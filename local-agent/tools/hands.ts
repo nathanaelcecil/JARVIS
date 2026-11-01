@@ -187,7 +187,9 @@ const OCR_MAX_TEXT = 12_000;
 
 export function lookDir(env: Record<string, string | undefined> = process.env): string {
   const override = env["JARVIS_HANDS_LOOK_DIR"];
-  return override && override.trim() ? resolve(override.trim()) : join(tmpdir(), "jarvis-hands-look");
+  return override && override.trim()
+    ? resolve(override.trim())
+    : join(tmpdir(), "jarvis-hands-look");
 }
 
 function ensureLookDir(env: Record<string, string | undefined> = process.env): string {
@@ -253,11 +255,13 @@ const screenRecordingDenied = (detail: string): Record<string, unknown> => ({
  * Capture the screen (or one window's rectangle) to a private PNG.
  * The caller gets a path plus geometry; it never gets the pixels inline.
  */
-export async function handsLook(args: {
-  display?: number;
-  pid?: number;
-  windowIndex?: number;
-} = {}): Promise<unknown> {
+export async function handsLook(
+  args: {
+    display?: number;
+    pid?: number;
+    windowIndex?: number;
+  } = {},
+): Promise<unknown> {
   pruneLookFiles();
   const dir = ensureLookDir();
   const file = join(dir, `look-${Date.now()}-${Math.floor(Math.random() * 1e6)}.png`);
@@ -277,8 +281,7 @@ export async function handsLook(args: {
       return { ...record, code: record["code"] ?? "window_info_failed" };
     }
     const bounds = record["bounds"] as
-      | { x: number; y: number; width: number; height: number }
-      | undefined;
+      { x: number; y: number; width: number; height: number } | undefined;
     if (!bounds || bounds.width < 2 || bounds.height < 2) {
       return {
         ok: false,
@@ -310,8 +313,7 @@ export async function handsLook(args: {
     bytes: size,
     target: label,
     ...(geometry ? { bounds: geometry } : {}),
-    note:
-      "The image is on disk for a vision-capable model. With a text-only model use hands_read_screen instead, which OCRs the same capture.",
+    note: "The image is on disk for a vision-capable model. With a text-only model use hands_read_screen instead, which OCRs the same capture.",
   };
 }
 
@@ -321,14 +323,16 @@ export async function handsOcr(path: string): Promise<unknown> {
     return {
       ok: false,
       code: "not_a_look_file",
-      error: "OCR only reads screenshots captured by hands_look; that path is outside the screenshot directory.",
+      error:
+        "OCR only reads screenshots captured by hands_look; that path is outside the screenshot directory.",
     };
   }
   if (!existsSync(path)) {
     return {
       ok: false,
       code: "missing_screenshot",
-      error: "that screenshot no longer exists (screenshots are pruned after 10 minutes). Capture it again.",
+      error:
+        "that screenshot no longer exists (screenshots are pruned after 10 minutes). Capture it again.",
     };
   }
   const result = await callHands("ocr", ["ocr", path], { untrusted: true });

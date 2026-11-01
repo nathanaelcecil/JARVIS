@@ -18,9 +18,7 @@ export type Recurrence =
   | { kind: "daily"; hour: number; minute: number; weekdaysOnly: boolean }
   | { kind: "weekly"; weekday: number; hour: number; minute: number };
 
-export type ParseResult =
-  | { ok: true; recurrence: Recurrence }
-  | { ok: false; error: string };
+export type ParseResult = { ok: true; recurrence: Recurrence } | { ok: false; error: string };
 
 export const WEEKDAY_NAMES = [
   "sunday",
@@ -38,7 +36,11 @@ const MAX_INTERVAL_MINUTES = 24 * 60;
 const USAGE =
   'Use "every 30 minutes", "every 2 hours", "every day at 08:30", "every weekday at 9am" or "every monday at 9".';
 
-function parseClock(hourText: string, minuteText: string | undefined, meridiem: string | undefined): { hour: number; minute: number } | null {
+function parseClock(
+  hourText: string,
+  minuteText: string | undefined,
+  meridiem: string | undefined,
+): { hour: number; minute: number } | null {
   let hour = Number(hourText);
   const minute = minuteText === undefined ? 0 : Number(minuteText);
   if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;

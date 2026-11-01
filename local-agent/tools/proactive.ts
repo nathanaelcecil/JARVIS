@@ -26,15 +26,10 @@ export function notify(args: {
   const script = `display notification "${safe(message.slice(0, 300))}" with title "${title}" sound name "Glass"`;
 
   return new Promise((resolve) => {
-    execFile(
-      "osascript",
-      ["-e", script],
-      { timeout: 5000 },
-      (err) => {
-        if (err) resolve({ success: false, error: err.message });
-        else resolve({ success: true });
-      }
-    );
+    execFile("osascript", ["-e", script], { timeout: 5000 }, (err) => {
+      if (err) resolve({ success: false, error: err.message });
+      else resolve({ success: true });
+    });
   });
 }
 
@@ -128,7 +123,7 @@ export function runBackground(args: {
     job.finishedAt = new Date().toISOString();
     job.durationMs = Date.now() - startedMs;
     console.log(
-      `[Agent] background ${id} → ${job.status} (exit ${code}): ${command.slice(0, 120)}`
+      `[Agent] background ${id} → ${job.status} (exit ${code}): ${command.slice(0, 120)}`,
     );
 
     // Proactive callback: JARVIS reports the result to the user
@@ -164,9 +159,7 @@ function reportCompletion(job: BackgroundJob, label: string): void {
         exitCode: job.exitCode ?? -1,
         summary,
       }),
-    }).catch((err) =>
-      console.warn(`[Agent] task-done callback failed for ${job.id}:`, err)
-    );
+    }).catch((err) => console.warn(`[Agent] task-done callback failed for ${job.id}:`, err));
   } catch (err) {
     console.warn("[Agent] task-done callback threw:", err);
   }

@@ -6,3 +6,8 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# Docs whose tables contain literal pipes inside inline code: prettier
+# reflows them with "|\n| --place |" and breaks the table.
+ATTICUS_PARITY.md
+CAPABILITIES.md

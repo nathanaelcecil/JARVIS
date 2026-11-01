@@ -134,16 +134,59 @@ func transcribe(fileURL: URL, completion: @escaping (String?) -> Void) {
 final class DrawView: NSView {
     private var strokes: [[NSPoint]] = []
     private var current: [NSPoint] = []
+    private var boxes: [NSRect] = []
+    private var boxDragOrigin: NSPoint?
+    private var currentBox: NSRect?
+    private var labels: [(text: String, at: NSPoint)] = []
     var onEscape: (() -> Void)?
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    private var isEmpty: Bool { strokes.isEmpty && boxes.isEmpty && labels.isEmpty && current.isEmpty }
+
+    private func clearAll() {
+        strokes = []
+        current = []
+        boxes = []
+        labels = []
+        currentBox = nil
+        boxDragOrigin = nil
+        needsDisplay = true
+    }
+
+    /// Ask for label text, then draw it where the user option-clicked.
+    private func addLabel(at point: NSPoint) {
+        let alert = NSAlert()
+        alert.messageText = "Label"
+        alert.informativeText = "Text to draw at that point."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = "e.g. look here"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        labels.append((text: text, at: point))
+        needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         NSColor.clear.setFill()
         dirtyRect.fill()
         NSColor.systemRed.setStroke()
+
+        // Boxes: shift-drag. Drawn first so arrows stay legible on top.
+        NSColor.systemRed.setStroke()
+        for rect in boxes + [currentBox].compactMap({ $0 }) {
+            let path = NSBezierPath(rect: rect)
+            path.lineWidth = 3
+            path.stroke()
+        }
+
         for stroke in strokes + [current] where stroke.count > 1 {
             let path = NSBezierPath()
             path.lineWidth = 4
@@ -169,19 +212,64 @@ final class DrawView: NSView {
                 headPath.stroke()
             }
         }
+
+        // Labels: option-click. Painted with a dark pill so red text stays
+        // readable over a light or a dark window.
+        for label in labels {
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 18, weight: .semibold),
+                .foregroundColor: NSColor.systemRed,
+            ]
+            let size = label.text.size(withAttributes: attributes)
+            let pill = NSRect(
+                x: label.at.x - 6,
+                y: label.at.y - size.height - 6,
+                width: size.width + 12,
+                height: size.height + 12
+            )
+            NSColor(calibratedWhite: 0, alpha: 0.55).setFill()
+            NSBezierPath(roundedRect: pill, xRadius: 6, yRadius: 6).fill()
+            label.text.draw(at: NSPoint(x: label.at.x, y: label.at.y - size.height), withAttributes: attributes)
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
-        current = [convert(event.locationInWindow, from: nil)]
+        let point = convert(event.locationInWindow, from: nil)
+        if event.modifierFlags.contains(.option) {
+            addLabel(at: point)
+            return
+        }
+        if event.modifierFlags.contains(.shift) {
+            boxDragOrigin = point
+            currentBox = NSRect(origin: point, size: .zero)
+            return
+        }
+        current = [point]
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
-        current.append(convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        if let origin = boxDragOrigin {
+            currentBox = NSRect(
+                x: min(origin.x, point.x),
+                y: min(origin.y, point.y),
+                width: abs(point.x - origin.x),
+                height: abs(point.y - origin.y)
+            )
+            needsDisplay = true
+            return
+        }
+        current.append(point)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        if let box = currentBox, box.width > 4, box.height > 4 {
+            boxes.append(box)
+        }
+        currentBox = nil
+        boxDragOrigin = nil
         if current.count > 1 { strokes.append(current) }
         current = []
         needsDisplay = true
@@ -189,12 +277,10 @@ final class DrawView: NSView {
 
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { // Escape: clear, then the next Escape closes
-            if strokes.isEmpty {
+            if isEmpty {
                 onEscape?()
             } else {
-                strokes = []
-                current = []
-                needsDisplay = true
+                clearAll()
             }
         } else {
             super.keyDown(with: event)
@@ -319,6 +405,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
 
         menu.addItem(.separator())
 
+        let meetings = NSMenuItem(title: "Open meetings folder", action: #selector(openMeetings), keyEquivalent: "")
+        meetings.target = self
+        menu.addItem(meetings)
+
         let permissions = NSMenuItem(title: "Check permissions", action: #selector(checkPermissions), keyEquivalent: "")
         permissions.target = self
         menu.addItem(permissions)
@@ -337,6 +427,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    @objc private func openMeetings() {
+        try? FileManager.default.createDirectory(at: meetingsDir, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(meetingsDir)
     }
 
     @objc private func checkPermissions() {

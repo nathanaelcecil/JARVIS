@@ -33,9 +33,7 @@ const historyEntries = new Map<string, Entry<CachedMessage[]>>();
 
 // ── Memories ────────────────────────────────────────────────
 export function getCachedMemories(): Memory[] | null {
-  return memoryEntry && memoryEntry.expiresAt > Date.now()
-    ? memoryEntry.value
-    : null;
+  return memoryEntry && memoryEntry.expiresAt > Date.now() ? memoryEntry.value : null;
 }
 
 export function setCachedMemories(rows: Memory[]): void {
@@ -48,9 +46,7 @@ export function invalidateMemories(): void {
 
 // ── Learned behaviors ───────────────────────────────────────
 export function getCachedBehaviors(): LearnedBehavior[] | null {
-  return behaviorEntry && behaviorEntry.expiresAt > Date.now()
-    ? behaviorEntry.value
-    : null;
+  return behaviorEntry && behaviorEntry.expiresAt > Date.now() ? behaviorEntry.value : null;
 }
 
 export function setCachedBehaviors(rows: LearnedBehavior[]): void {
@@ -68,12 +64,8 @@ export function getCachedHistory(sessionId: string): CachedMessage[] | null {
 }
 
 /** Store a fetched history snapshot. `msgs` must be chronological. */
-export function setCachedHistory(
-  sessionId: string,
-  msgs: CachedMessage[],
-): void {
-  const trimmed =
-    msgs.length > HISTORY_MAX ? msgs.slice(msgs.length - HISTORY_MAX) : msgs;
+export function setCachedHistory(sessionId: string, msgs: CachedMessage[]): void {
+  const trimmed = msgs.length > HISTORY_MAX ? msgs.slice(msgs.length - HISTORY_MAX) : msgs;
   historyEntries.set(sessionId, {
     value: trimmed,
     expiresAt: Date.now() + HISTORY_TTL_MS,

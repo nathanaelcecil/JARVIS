@@ -17,36 +17,36 @@ Python 3.12 virtualenv at `.xtts-venv`.
 Versions are what is installed in `node_modules`; licenses come from each
 package's own `package.json` `license` field.
 
-| Package | Installed | License |
-|---|---|---|
-| `@hookform/resolvers` | 5.5.7 | MIT |
-| `@radix-ui/react-*` (28 packages) | 1.1.x – 2.3.x | MIT |
-| `@supabase/supabase-js` | 2.115.0 | MIT |
-| `@tailwindcss/vite` | 4.3.3 | MIT |
-| `@tanstack/react-query` | 5.101.4 | MIT |
-| `@tanstack/react-router` | 1.170.18 | MIT |
-| `@tanstack/react-start` | 1.168.32 | MIT |
-| `@tanstack/router-plugin` | 1.168.23 | MIT |
-| `class-variance-authority` | 0.7.1 | Apache-2.0 |
-| `clsx` | 2.1.1 | MIT |
-| `cmdk` | 1.1.1 | MIT |
-| `date-fns` | 4.4.0 | MIT |
-| `embla-carousel-react` | 8.6.0 | MIT |
-| `input-otp` | 1.4.2 | MIT |
-| `lucide-react` | 0.575.0 | ISC |
-| `react` / `react-dom` | 19.2.8 | MIT |
-| `react-day-picker` | 9.14.0 | MIT |
-| `react-hook-form` | 7.83.0 | MIT |
-| `react-resizable-panels` | 4.12.2 | MIT |
-| `recharts` | 2.15.4 | MIT |
-| `sonner` | 2.0.7 | MIT |
-| `tailwind-merge` | 3.6.0 | MIT |
-| `tailwindcss` | 4.3.3 | MIT |
-| `tw-animate-css` | 1.4.0 | MIT |
-| `vaul` | 1.1.2 | MIT |
-| `vite-tsconfig-paths` | 6.1.1 | MIT |
-| `ws` | 8.21.1 | MIT |
-| `zod` | 3.25.76 | MIT |
+| Package                           | Installed     | License    |
+| --------------------------------- | ------------- | ---------- |
+| `@hookform/resolvers`             | 5.5.7         | MIT        |
+| `@radix-ui/react-*` (28 packages) | 1.1.x – 2.3.x | MIT        |
+| `@supabase/supabase-js`           | 2.115.0       | MIT        |
+| `@tailwindcss/vite`               | 4.3.3         | MIT        |
+| `@tanstack/react-query`           | 5.101.4       | MIT        |
+| `@tanstack/react-router`          | 1.170.18      | MIT        |
+| `@tanstack/react-start`           | 1.168.32      | MIT        |
+| `@tanstack/router-plugin`         | 1.168.23      | MIT        |
+| `class-variance-authority`        | 0.7.1         | Apache-2.0 |
+| `clsx`                            | 2.1.1         | MIT        |
+| `cmdk`                            | 1.1.1         | MIT        |
+| `date-fns`                        | 4.4.0         | MIT        |
+| `embla-carousel-react`            | 8.6.0         | MIT        |
+| `input-otp`                       | 1.4.2         | MIT        |
+| `lucide-react`                    | 0.575.0       | ISC        |
+| `react` / `react-dom`             | 19.2.8        | MIT        |
+| `react-day-picker`                | 9.14.0        | MIT        |
+| `react-hook-form`                 | 7.83.0        | MIT        |
+| `react-resizable-panels`          | 4.12.2        | MIT        |
+| `recharts`                        | 2.15.4        | MIT        |
+| `sonner`                          | 2.0.7         | MIT        |
+| `tailwind-merge`                  | 3.6.0         | MIT        |
+| `tailwindcss`                     | 4.3.3         | MIT        |
+| `tw-animate-css`                  | 1.4.0         | MIT        |
+| `vaul`                            | 1.1.2         | MIT        |
+| `vite-tsconfig-paths`             | 6.1.1         | MIT        |
+| `ws`                              | 8.21.1        | MIT        |
+| `zod`                             | 3.25.76       | MIT        |
 
 ### Development / build-time
 
@@ -70,8 +70,8 @@ not a licensing one; their licenses still apply to anything shipped.
 
 ## 2. Local agent
 
-| Package | Installed | License |
-|---|---|---|
+| Package      | Installed                              | License    |
+| ------------ | -------------------------------------- | ---------- |
 | `playwright` | 1.63.0 (in `local-agent/node_modules`) | Apache-2.0 |
 
 Playwright downloads browser binaries separately on install; those binaries
@@ -82,26 +82,26 @@ are **unverified** here because no browser was installed during this task.
 
 No runtime dependencies. Development-only:
 
-| Package | Installed | License |
-|---|---|---|
-| `typescript` | 5.9.3 | Apache-2.0 |
-| `tsx` | 4.23.15 | MIT |
-| `@types/vscode` | 1.140.0 | MIT |
-| `@types/node` | 20.19.43 | MIT |
+| Package         | Installed | License    |
+| --------------- | --------- | ---------- |
+| `typescript`    | 5.9.3     | Apache-2.0 |
+| `tsx`           | 4.23.15   | MIT        |
+| `@types/vscode` | 1.140.0   | MIT        |
+| `@types/node`   | 20.19.43  | MIT        |
 
 ## 4. Python voice dependencies
 
 Verified from `*.dist-info/METADATA` inside `.xtts-venv`:
 
-| Package | Installed | License (from metadata) |
-|---|---|---|
-| `torch` | 2.14.0 | Composite: `Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT` (bundles third-party components — see its `LICENSE` and `third_party/*/LICENSE`) |
-| `torchaudio` | 2.11.0 | BSD (classifier: `License :: OSI Approved :: BSD License`) |
-| `torchcodec` | 0.16.0 | **unverified** (metadata present, license field not read) |
-| `coqui-tts` (`coqui_tts`) | 0.27.5 | MPL-2.0 |
-| `coqui-tts-trainer` (`coqui_tts_trainer`) | 0.3.3 | Apache-2.0 |
-| `flask` | 3.1.3 | BSD-3-Clause |
-| `transformers` | 5.0.0 | Apache-2.0 |
+| Package                                   | Installed | License (from metadata)                                                                                                                                                                           |
+| ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `torch`                                   | 2.14.0    | Composite: `Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT` (bundles third-party components — see its `LICENSE` and `third_party/*/LICENSE`) |
+| `torchaudio`                              | 2.11.0    | BSD (classifier: `License :: OSI Approved :: BSD License`)                                                                                                                                        |
+| `torchcodec`                              | 0.16.0    | **unverified** (metadata present, license field not read)                                                                                                                                         |
+| `coqui-tts` (`coqui_tts`)                 | 0.27.5    | MPL-2.0                                                                                                                                                                                           |
+| `coqui-tts-trainer` (`coqui_tts_trainer`) | 0.3.3     | Apache-2.0                                                                                                                                                                                        |
+| `flask`                                   | 3.1.3     | BSD-3-Clause                                                                                                                                                                                      |
+| `transformers`                            | 5.0.0     | Apache-2.0                                                                                                                                                                                        |
 
 `start-jarvis.command` installs `torch`, `torchaudio`, `coqui-tts[codec]`,
 `transformers>=4.57,<5.1` and `flask`. Note that `transformers` 5.0.0 is
@@ -140,8 +140,8 @@ user's behalf. The **CPML is reported to be non-commercial** and to impose
 attribution/notice obligations; **this was not verified here** (no license text
 is shipped in this repository). Treat XTTS-v2 as **not cleared for commercial
 distribution** until the CPML text is read and the intended use is checked
-against it. The `coqui-tts` *code* is MPL-2.0 (verified above); the *model
-weights* are governed separately by the CPML (**unverified**).
+against it. The `coqui-tts` _code_ is MPL-2.0 (verified above); the _model
+weights_ are governed separately by the CPML (**unverified**).
 
 ## 8. `voice_sample.wav`
 
@@ -163,7 +163,7 @@ the speaker's consent before publishing generated audio.
   observation and OCR, computer control, and the items scheduled there) were
   implemented independently against Apple's Accessibility/Vision/CoreGraphics
   documentation and this repository's own architecture. Atticus influenced the
-  *feature list and permission model*, not the implementation.
+  _feature list and permission model_, not the implementation.
 - If any logic is ever ported from an MIT-licensed project in the future, the
   MIT copyright notice and permission notice for that project **must be
   preserved** in this file (or a bundled notices file).

@@ -38,9 +38,7 @@ export function StatusOverlay({ state, clock }: StatusOverlayProps) {
 
   return (
     <div className="pointer-events-none absolute right-8 top-8 space-y-1 text-right md:right-11 md:top-11">
-      <p className="hud-mono text-[9px] tracking-[0.3em] text-hud-dim">
-        UTC {clock}
-      </p>
+      <p className="hud-mono text-[9px] tracking-[0.3em] text-hud-dim">UTC {clock}</p>
       <p className="hud-mono text-[9px] tracking-[0.3em] text-hud-dim">
         COMPUTE LOAD {computeLoad ?? "--.-"}%
       </p>

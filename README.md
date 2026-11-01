@@ -10,23 +10,25 @@ and Supabase are optional integrations.
 
 ## What is in the box
 
-| Area | Implementation |
-| --- | --- |
-| UI | React 19 + TanStack Start/Router, Vite 8, Tailwind 4, Canvas amber core |
-| Chat | SSE endpoint `/api/stream`, streaming reply + voice + tool orchestration |
-| Model | Local Ollama via OpenAI-compatible API (default `qwen2.5:14b`) |
-| Voice out | XTTS-v2 Python server, sentence-aware streaming TTS and audio-clock text reveal |
-| Voice in | `MediaRecorder` → `/api/transcribe` → local `whisper-cli` |
-| Tools | Local agent on `127.0.0.1:3008`, plus server-side Gmail/Calendar/Notion |
-| Screen | Observe (windows, accessibility text, OCR, screenshots) and control (click, type, keys, menus, window placement) — two separate helpers, two separate macOS permissions; every acting tool needs your approval |
-| Coding agent | Bounded investigate → edit → verify loop, `/api/agent`, VS Code extension |
-| Automation | Routines ("every weekday at 8am"), no-model watches ("tell me when the deploy window appears"), learned procedures replayed **before** any model call — file-backed in `.jarvis/`, no Supabase needed |
-| Persistence | Supabase (optional) for chat/memory/tasks; `.jarvis/` for agent, profile and automation state |
-| Mac integrations | Spotlight file search, Contacts lookup, Spotify transport, conversation-history search |
-| Menu bar | `native/jarvis-menubar`: menu-bar item, ⌃⌥D dictation into any app, on-device "Jarvis" wake word, drawing overlay, meeting recorder with a saved transcript |
+| Area             | Implementation                                                                                                                                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI               | React 19 + TanStack Start/Router, Vite 8, Tailwind 4, Canvas amber core                                                                                                                                        |
+| Chat             | SSE endpoint `/api/stream`, streaming reply + voice + tool orchestration                                                                                                                                       |
+| Model            | Local Ollama via OpenAI-compatible API (default `qwen2.5:14b`)                                                                                                                                                 |
+| Voice out        | XTTS-v2 Python server, sentence-aware streaming TTS and audio-clock text reveal                                                                                                                                |
+| Voice in         | `MediaRecorder` → `/api/transcribe` → local `whisper-cli`                                                                                                                                                      |
+| Tools            | Local agent on `127.0.0.1:3008`, plus server-side Gmail/Calendar/Notion                                                                                                                                        |
+| Screen           | Observe (windows, accessibility text, OCR, screenshots) and control (click, type, keys, menus, window placement) — two separate helpers, two separate macOS permissions; every acting tool needs your approval |
+| Coding agent     | Bounded investigate → edit → verify loop, `/api/agent`, VS Code extension                                                                                                                                      |
+| Automation       | Routines ("every weekday at 8am"), no-model watches ("tell me when the deploy window appears"), learned procedures replayed **before** any model call — file-backed in `.jarvis/`, no Supabase needed          |
+| Persistence      | Supabase (optional) for chat/memory/tasks; `.jarvis/` for agent, profile and automation state                                                                                                                  |
+| Mac integrations | Spotlight file search, Contacts lookup, Spotify transport, conversation-history search                                                                                                                         |
+| Menu bar         | `native/jarvis-menubar`: menu-bar item, ⌃⌥D dictation into any app, on-device "Jarvis" wake word, drawing overlay, meeting recorder with a saved transcript                                                    |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map and
-[SETUP.md](SETUP.md) for step-by-step setup.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full map,
+[SETUP.md](SETUP.md) for step-by-step setup, and
+[CAPABILITIES.md](CAPABILITIES.md) for what JARVIS can do plus the exact way
+to test each part. `bun run verify` checks the whole installation.
 
 ## Quick start
 

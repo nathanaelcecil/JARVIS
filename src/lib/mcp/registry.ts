@@ -140,6 +140,31 @@ export const MCP_REGISTRY: MCPServer[] = [
         },
       },
       {
+        name: "control_wait",
+        description:
+          "Wait a few seconds for a window or page to settle before the next step. Bounded to 30 s; cancels with the request.",
+        parameters: { seconds: { type: "number", description: "0-30 (default 1)" } },
+      },
+      {
+        name: "control_scroll_to",
+        description:
+          'Scroll a window until some words are visible ("scroll to the Save button"). Checks the current view first, then up to 20 steps; reports honestly when the words never appear.',
+        parameters: {
+          pid: { type: "number", description: "Target process id" },
+          text: { type: "string", description: "Words to scroll into view" },
+          direction: { type: "string", description: "down (default) or up" },
+          maxSteps: { type: "number", description: "1-20 scroll steps" },
+        },
+      },
+      {
+        name: "open_settings",
+        description:
+          "Open a specific System Settings pane — accessibility, screen-recording, microphone, speech, automation, notifications, sound, network or battery. Use it instead of telling the user where to click.",
+        parameters: {
+          pane: { type: "string", description: "Pane name, e.g. accessibility" },
+        },
+      },
+      {
         name: "control_status",
         description:
           "READ-ONLY: whether macOS granted Accessibility and Screen Recording to the CONTROL helper. Use it to explain why control is unavailable.",

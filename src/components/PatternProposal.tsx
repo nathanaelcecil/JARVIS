@@ -18,12 +18,8 @@ export function PatternProposal({
       <p className="hud-mono text-[10px] tracking-wider text-hud-dim mb-2">
         JARVIS — PATTERN OBSERVATION
       </p>
-      <p className="hud-mono text-[12px] text-hud leading-relaxed mb-1">
-        {description}
-      </p>
-      <p className="hud-mono text-[11px] text-hud-bright italic mb-3">
-        {question}
-      </p>
+      <p className="hud-mono text-[12px] text-hud leading-relaxed mb-1">{description}</p>
+      <p className="hud-mono text-[11px] text-hud-bright italic mb-3">{question}</p>
       <div className="flex gap-2">
         <button
           onClick={onAdopt}

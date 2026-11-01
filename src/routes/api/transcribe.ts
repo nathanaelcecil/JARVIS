@@ -18,11 +18,9 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { guardLocalRequest } from "../../lib/local-request-guard";
 
-const WHISPER_BIN =
-  process.env["WHISPER_BIN"] ?? "/opt/homebrew/bin/whisper-cli";
+const WHISPER_BIN = process.env["WHISPER_BIN"] ?? "/opt/homebrew/bin/whisper-cli";
 const WHISPER_MODEL =
-  process.env["WHISPER_MODEL"] ??
-  path.resolve(process.cwd(), "models/ggml-small.en.bin");
+  process.env["WHISPER_MODEL"] ?? path.resolve(process.cwd(), "models/ggml-small.en.bin");
 const STT_LANG = process.env["STT_LANG"] ?? "en";
 const MAX_BASE64_CHARS = 30 * 1024 * 1024; // ≈22MB raw audio
 
@@ -37,7 +35,7 @@ async function exists(p: string): Promise<boolean> {
 
 function run(
   cmd: string,
-  args: string[]
+  args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args);
@@ -104,22 +102,10 @@ export const Route = createFileRoute("/api/transcribe")({
           await fs.writeFile(inPath, Buffer.from(audioBase64, "base64"));
 
           // Normalize to 16kHz mono WAV — what whisper.cpp expects.
-          const ff = await run("ffmpeg", [
-            "-y",
-            "-i",
-            inPath,
-            "-ar",
-            "16000",
-            "-ac",
-            "1",
-            wavPath,
-          ]);
+          const ff = await run("ffmpeg", ["-y", "-i", inPath, "-ar", "16000", "-ac", "1", wavPath]);
           if (ff.code !== 0 || !(await exists(wavPath))) {
             console.error("[STT] ffmpeg failed:", ff.stderr.slice(-400));
-            return Response.json(
-              { error: "Audio conversion failed" },
-              { status: 422 }
-            );
+            return Response.json({ error: "Audio conversion failed" }, { status: 422 });
           }
 
           const wp = await run(WHISPER_BIN, [
@@ -135,10 +121,7 @@ export const Route = createFileRoute("/api/transcribe")({
           ]);
           if (wp.code !== 0) {
             console.error("[STT] whisper failed:", wp.stderr.slice(-400));
-            return Response.json(
-              { error: "Transcription failed" },
-              { status: 500 }
-            );
+            return Response.json({ error: "Transcription failed" }, { status: 500 });
           }
 
           // Lines look like: "[00:00:00.000 --> 00:00:02.480]   Hello, ..."
@@ -158,7 +141,7 @@ export const Route = createFileRoute("/api/transcribe")({
           console.error("[STT] error:", err);
           return Response.json(
             { error: err instanceof Error ? err.message : "STT failed" },
-            { status: 500 }
+            { status: 500 },
           );
         } finally {
           await fs.rm(dir, { recursive: true, force: true }).catch(() => {});

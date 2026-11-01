@@ -315,14 +315,18 @@ function Index() {
     return () => clearInterval(i);
   }, []);
 
-  // Update state based on UI activity
+  // Update state based on UI activity. The previous value is read through the
+  // functional update rather than closing over `state`, so this effect does not
+  // re-run (and cannot act on a stale state) when the state it just set lands.
   useEffect(() => {
     if (micActive) {
       setState("listening");
     } else if (isProcessing) {
       setState("thinking");
-    } else if (state === "listening" || state === "thinking") {
-      setState("idle");
+    } else {
+      setState((previous) =>
+        previous === "listening" || previous === "thinking" ? "idle" : previous,
+      );
     }
   }, [micActive, isProcessing]);
 

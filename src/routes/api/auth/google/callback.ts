@@ -15,7 +15,9 @@ export const Route = createFileRoute("/api/auth/google/callback")({
         const code = url.searchParams.get("code");
 
         if (error || !code) {
-          return new Response("Google sign-in failed: " + (error ?? "no code returned"), { status: 400 });
+          return new Response("Google sign-in failed: " + (error ?? "no code returned"), {
+            status: 400,
+          });
         }
 
         try {

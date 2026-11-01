@@ -141,11 +141,7 @@ export async function resolveWorkspacePath(
   const rel = path.relative(policy.root, abs);
   const segments = rel.split(path.sep).filter(Boolean);
   const base = segments[segments.length - 1] ?? "";
-  if (
-    SENSITIVE_FILES.has(base) ||
-    /^\.env\./.test(base) ||
-    isSensitiveGitConfig(rel)
-  ) {
+  if (SENSITIVE_FILES.has(base) || /^\.env\./.test(base) || isSensitiveGitConfig(rel)) {
     throw new WorkspaceViolation(`Sensitive file is off-limits: ${base}`);
   }
   if (mode === "write" && segments.some(isIgnoredSegment)) {

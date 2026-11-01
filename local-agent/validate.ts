@@ -257,6 +257,31 @@ export const TOOL_ARG_SPECS: Record<string, ToolArgSpec> = {
   control_focus: {
     args: { pid: num(1, 4_194_304, true, true), title: optText(200, "label") },
   },
+  control_wait: { args: { seconds: num(0, 30, false, true) } },
+  control_scroll_to: {
+    args: {
+      pid: num(1, 4_194_304, true, true),
+      text: text(200),
+      direction: {
+        kind: "string",
+        required: false,
+        enum: ["down", "up"] as const,
+      },
+      maxSteps: num(1, 20, false, true),
+    },
+  },
+  open_settings: {
+    args: {
+      pane: {
+        kind: "string",
+        required: true,
+        minLength: 1,
+        maxLength: 40,
+        pattern: /^[a-z][a-z-]*$/i,
+        patternHint: "a pane name such as accessibility or screen-recording",
+      },
+    },
+  },
   control_map: {
     args: { pid: num(1, 4_194_304, true, true), windowIndex: num(0, 500, false, true) },
   },

@@ -32,14 +32,14 @@ provider in the active path.
 
 ### Entry points
 
-| Entry | File | Role |
-| --- | --- | --- |
-| Start config | `src/start.ts` | CSRF middleware for server functions, SSR error wrapper |
-| Server fetch | `src/server.ts` | Cloudflare/Nitro worker entry, h3 error normalization |
-| Router | `src/router.tsx` | TanStack router |
-| Root layout | `src/routes/__root.tsx` | HTML shell, styles, error boundary |
-| Main page | `src/routes/index.tsx` | Chat UI, SSE client, TTS and reveal orchestration |
-| One-click launch | `start-jarvis.command` | Python/venv/XTTS + local agent + `bun run dev` |
+| Entry            | File                    | Role                                                    |
+| ---------------- | ----------------------- | ------------------------------------------------------- |
+| Start config     | `src/start.ts`          | CSRF middleware for server functions, SSR error wrapper |
+| Server fetch     | `src/server.ts`         | Cloudflare/Nitro worker entry, h3 error normalization   |
+| Router           | `src/router.tsx`        | TanStack router                                         |
+| Root layout      | `src/routes/__root.tsx` | HTML shell, styles, error boundary                      |
+| Main page        | `src/routes/index.tsx`  | Chat UI, SSE client, TTS and reveal orchestration       |
+| One-click launch | `start-jarvis.command`  | Python/venv/XTTS + local agent + `bun run dev`          |
 
 The production build targets `cloudflare-module` through Nitro, but the app is
 designed as a single local process. In-memory state (task registry,
@@ -78,18 +78,18 @@ deliberately as UI scaffolding; it is not on the current render path.
 
 ## 3. Backend routes
 
-| Route | Auth | Purpose |
-| --- | --- | --- |
-| `POST /api/stream` | none (loopback app) | Chat SSE: fast path, data pre-pass, model stream, tool execution |
-| `GET /api/agent` | Bearer `.jarvis/agent-token` | Task list/status/diffs/memory |
-| `POST /api/agent` | Bearer | start/cancel/approve/resume/revert/memory edit |
-| `POST /api/confirm` | none | Resolve a pending confirm-tier tool (3 min expiry) |
-| `GET/POST /api/proactive` | none | Poll pending messages; local-agent task callback |
-| `POST /api/transcribe` | none | Mic audio → local whisper.cpp text |
-| `GET /api/auth/google` | none | Redirect to Google consent |
-| `GET /api/auth/google/callback` | none | Exchange code, store tokens |
-| Server fn `speak` | CSRF-protected | Text → XTTS → base64 WAV data URL |
-| Server fn `getTaskStatus` / `killSwitch` | CSRF-protected | Status and stop |
+| Route                                    | Auth                         | Purpose                                                          |
+| ---------------------------------------- | ---------------------------- | ---------------------------------------------------------------- |
+| `POST /api/stream`                       | none (loopback app)          | Chat SSE: fast path, data pre-pass, model stream, tool execution |
+| `GET /api/agent`                         | Bearer `.jarvis/agent-token` | Task list/status/diffs/memory                                    |
+| `POST /api/agent`                        | Bearer                       | start/cancel/approve/resume/revert/memory edit                   |
+| `POST /api/confirm`                      | none                         | Resolve a pending confirm-tier tool (3 min expiry)               |
+| `GET/POST /api/proactive`                | none                         | Poll pending messages; local-agent task callback                 |
+| `POST /api/transcribe`                   | none                         | Mic audio → local whisper.cpp text                               |
+| `GET /api/auth/google`                   | none                         | Redirect to Google consent                                       |
+| `GET /api/auth/google/callback`          | none                         | Exchange code, store tokens                                      |
+| Server fn `speak`                        | CSRF-protected               | Text → XTTS → base64 WAV data URL                                |
+| Server fn `getTaskStatus` / `killSwitch` | CSRF-protected               | Status and stop                                                  |
 
 ### Chat pipeline (`src/routes/api/stream.ts`)
 
@@ -279,18 +279,18 @@ general file reader.
 
 **Control — `control_*`, `confirm` tier**
 
-| Tool | What it does |
-| --- | --- |
-| `control_map(pid, windowIndex?)` | list addressable controls (role, label, x/y, enabled, pressable) — `auto` |
-| `control_status()` | permission report for the control helper — `auto` |
+| Tool                                                                    | What it does                                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `control_map(pid, windowIndex?)`                                        | list addressable controls (role, label, x/y, enabled, pressable) — `auto`            |
+| `control_status()`                                                      | permission report for the control helper — `auto`                                    |
 | `control_click(pid, label?/role?/near?/x,y?, double?, right?, verify?)` | AXPress when the element supports it, else a synthetic click at the element's centre |
-| `control_type(text, pid?, label?, submit?, verify?)` | focus the field, then type via unicode key events; refuses secure fields |
-| `control_key(combo, times?, pid?)` | `cmd+shift+t`, arrows, F-keys, Return/Tab/Escape, from a fixed key table |
-| `control_scroll(dy, dx?, pid?, x?, y?)` | pixel-unit wheel events |
-| `control_drag(from, to, pid?)` | press, 10 interpolated drags, release |
-| `control_menu(pid, path "File>Export>PDF")` | accessibility menu traversal, ≤6 levels |
-| `control_place(pid, where left\|right\|full\|fullscreen\|center)` | window geometry via AXPosition/AXSize, reported back as actual |
-| `control_focus(pid, title?)` | activate the app and raise the matching window |
+| `control_type(text, pid?, label?, submit?, verify?)`                    | focus the field, then type via unicode key events; refuses secure fields             |
+| `control_key(combo, times?, pid?)`                                      | `cmd+shift+t`, arrows, F-keys, Return/Tab/Escape, from a fixed key table             |
+| `control_scroll(dy, dx?, pid?, x?, y?)`                                 | pixel-unit wheel events                                                              |
+| `control_drag(from, to, pid?)`                                          | press, 10 interpolated drags, release                                                |
+| `control_menu(pid, path "File>Export>PDF")`                             | accessibility menu traversal, ≤6 levels                                              |
+| `control_place(pid, where left\|right\|full\|fullscreen\|center)`       | window geometry via AXPosition/AXSize, reported back as actual                       |
+| `control_focus(pid, title?)`                                            | activate the app and raise the matching window                                       |
 
 Every acting tool is `confirm` tier in both permission tables, and the local
 agent refuses it without a valid approval token — the bearer secret alone can
@@ -316,13 +316,13 @@ the system prompt tells JARVIS to explain the grant and the split.
 `src/lib/automation/` adds the "does things on its own" half without a second
 daemon and without Supabase:
 
-| Module | Responsibility |
-| --- | --- |
-| `schedule.ts` | Parses `"every 30 minutes"`, `"every 2 hours"`, `"every day at 08:30"`, `"every weekday at 9am"`, `"every monday at 9"` into a typed recurrence, and computes the next run in local time. Anything else is refused with the accepted forms. |
-| `routines.ts` | File-backed routine store (`.jarvis/routines.json`, atomic writes, per-file lock). `dueRoutines()` claims and advances in one write, so two overlapping ticks cannot double-fire. Claimed prompts go to `.jarvis/routine-outbox.json`. A mutation that changes nothing skips the write entirely, so an idle tick costs one small read and creates no files. |
-| `watches.ts` | Pure `evaluateWatch(watch, observation)` plus a poller. Window watches fire on transitions (`shows`, `gone`, `settled` after two polls); command watches fire when the test starts passing. No model is involved while waiting. |
-| `procedures.ts` | Learned phrases → tool step lists. Matching is exact after normalisation (a fuzzy match could replay the wrong thing). `isReplaySafe` refuses never-tier tools and steps whose arguments look destructive. |
-| `tick.ts` | One pass: claim routines → outbox + banner, then poll watches. Contained per item; a broken watch never blocks reminder delivery. |
+| Module          | Responsibility                                                                                                                                                                                                                                                                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schedule.ts`   | Parses `"every 30 minutes"`, `"every 2 hours"`, `"every day at 08:30"`, `"every weekday at 9am"`, `"every monday at 9"` into a typed recurrence, and computes the next run in local time. Anything else is refused with the accepted forms.                                                                                                                 |
+| `routines.ts`   | File-backed routine store (`.jarvis/routines.json`, atomic writes, per-file lock). `dueRoutines()` claims and advances in one write, so two overlapping ticks cannot double-fire. Claimed prompts go to `.jarvis/routine-outbox.json`. A mutation that changes nothing skips the write entirely, so an idle tick costs one small read and creates no files. |
+| `watches.ts`    | Pure `evaluateWatch(watch, observation)` plus a poller. Window watches fire on transitions (`shows`, `gone`, `settled` after two polls); command watches fire when the test starts passing. No model is involved while waiting.                                                                                                                             |
+| `procedures.ts` | Learned phrases → tool step lists. Matching is exact after normalisation (a fuzzy match could replay the wrong thing). `isReplaySafe` refuses never-tier tools and steps whose arguments look destructive.                                                                                                                                                  |
+| `tick.ts`       | One pass: claim routines → outbox + banner, then poll watches. Contained per item; a broken watch never blocks reminder delivery.                                                                                                                                                                                                                           |
 
 The existing 15 s scheduler (`src/lib/proactive/scheduler.ts`) calls
 the automation tick, so there is one clock in the process. `/api/proactive`
@@ -351,15 +351,15 @@ CORRECTING → COMPLETED | FAILED | CANCELLED | NEEDS_APPROVAL`
 
 Bounds and defaults (env-overridable):
 
-| Limit | Default | Range |
-| --- | --- | --- |
-| `MAX_ITERATIONS` | 10 | 3–40 (`JARVIS_AGENT_MAX_ITERATIONS`) |
-| Deadline | 12 min | 30 s–60 min (`JARVIS_AGENT_TIMEOUT_MS`) |
-| Correction rounds | 3 | fixed |
-| Approval timeout | 180 s | fixed |
-| Tools per metadata block | 6 | fixed |
-| Transcript messages | 60 | fixed |
-| Tool result chars | 6000 | fixed |
+| Limit                    | Default | Range                                   |
+| ------------------------ | ------- | --------------------------------------- |
+| `MAX_ITERATIONS`         | 10      | 3–40 (`JARVIS_AGENT_MAX_ITERATIONS`)    |
+| Deadline                 | 12 min  | 30 s–60 min (`JARVIS_AGENT_TIMEOUT_MS`) |
+| Correction rounds        | 3       | fixed                                   |
+| Approval timeout         | 180 s   | fixed                                   |
+| Tools per metadata block | 6       | fixed                                   |
+| Transcript messages      | 60      | fixed                                   |
+| Tool result chars        | 6000    | fixed                                   |
 
 Per turn the engine calls the provider, parses `---METADATA---`, executes
 independent read-only tools concurrently, and runs writes sequentially. It has
@@ -401,7 +401,7 @@ task-created files after a modal confirmation.
 
 - `.jarvis/tasks.json` — bounded history (30 terminal tasks), atomic writes,
   serialized via a per-store queue. Mid-flight tasks become `CANCELLED +
-  interrupted` on restart and are resumable; they are never silently restarted.
+interrupted` on restart and are resumable; they are never silently restarted.
 - `.jarvis/memory.json` — per-repo engineering memory (architecture, decision,
   convention, bug, fix, failed approach, task status, note), capped at 200
   entries / 1000 chars, secret-screened, with file-mtime staleness marking.
@@ -442,15 +442,15 @@ It holds no AI logic. Editor context is capped before transmission (selection
 
 ### Supabase (optional)
 
-| Table | Use |
-| --- | --- |
-| `messages` | chat history per `session_id` |
-| `memory` | personal facts with relevance keywords + `last_accessed` |
-| `learned_behaviors` | user corrections/rules |
-| `activity_log` | tool execution audit |
-| `google_tokens` | OAuth tokens, single `user_id='default'` |
-| `proactive_schedules` | reminders, check-ins, task reports |
-| `proactive_messages` | pending proactive messages |
+| Table                 | Use                                                      |
+| --------------------- | -------------------------------------------------------- |
+| `messages`            | chat history per `session_id`                            |
+| `memory`              | personal facts with relevance keywords + `last_accessed` |
+| `learned_behaviors`   | user corrections/rules                                   |
+| `activity_log`        | tool execution audit                                     |
+| `google_tokens`       | OAuth tokens, single `user_id='default'`                 |
+| `proactive_schedules` | reminders, check-ins, task reports                       |
+| `proactive_messages`  | pending proactive messages                               |
 
 Chat works without Supabase; history, memory, schedules and Google/Notion do
 not. `supabase-server.ts` initializes the client lazily and, when the URL or
@@ -523,19 +523,19 @@ Git, local to the workspace.
 
 ## 10. Verification (recorded 2026-10-27, after the security-hardening pass)
 
-| Check | Command | Result |
-| --- | --- | --- |
-| TypeScript | `npx tsc --noEmit` | exit 0 |
-| Unit tests | `npm test` (vitest) | 460/460 passed, 28 files |
-| Production build | `npm run build` | exit 0 (Nitro cloudflare-module) |
-| Python syntax | `python3 -m py_compile xtts_server.py` | exit 0 |
-| Extension types | `npx tsc --noEmit` in `vscode-extension` | exit 0 |
-| Extension tests | `npm test` in `vscode-extension` | 18/18 passed |
-| Hands helpers build | `native/jarvis-hands/build.command`, `native/jarvis-hands-control/build.command` (swiftc 6.3.1) | exit 0 both |
-| Control helper refusals | real binary, un-granted TCC | `accessibility_denied` for click/map/key/menu; `bad_coordinates` for off-screen points; `unknown_key`/`unknown_modifier` for bad chords; `usage` for a bad `--where` |
-| Vision OCR | real helper on a PNG with known text | text returned correctly (`"Atticus / Your whole Mac, one sentence away."`), 5 lines |
-| Live tool path | real `bun local-agent/server.ts` + real helper through `routeToolCall` | read-only tools answered; confirm tier 401 without a token; `hands_click` 404 |
-| Targeted lint | `npx eslint` on touched paths | exit 0 |
+| Check                   | Command                                                                                         | Result                                                                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TypeScript              | `npx tsc --noEmit`                                                                              | exit 0                                                                                                                                                               |
+| Unit tests              | `npm test` (vitest)                                                                             | 460/460 passed, 28 files                                                                                                                                             |
+| Production build        | `npm run build`                                                                                 | exit 0 (Nitro cloudflare-module)                                                                                                                                     |
+| Python syntax           | `python3 -m py_compile xtts_server.py`                                                          | exit 0                                                                                                                                                               |
+| Extension types         | `npx tsc --noEmit` in `vscode-extension`                                                        | exit 0                                                                                                                                                               |
+| Extension tests         | `npm test` in `vscode-extension`                                                                | 18/18 passed                                                                                                                                                         |
+| Hands helpers build     | `native/jarvis-hands/build.command`, `native/jarvis-hands-control/build.command` (swiftc 6.3.1) | exit 0 both                                                                                                                                                          |
+| Control helper refusals | real binary, un-granted TCC                                                                     | `accessibility_denied` for click/map/key/menu; `bad_coordinates` for off-screen points; `unknown_key`/`unknown_modifier` for bad chords; `usage` for a bad `--where` |
+| Vision OCR              | real helper on a PNG with known text                                                            | text returned correctly (`"Atticus / Your whole Mac, one sentence away."`), 5 lines                                                                                  |
+| Live tool path          | real `bun local-agent/server.ts` + real helper through `routeToolCall`                          | read-only tools answered; confirm tier 401 without a token; `hands_click` 404                                                                                        |
+| Targeted lint           | `npx eslint` on touched paths                                                                   | exit 0                                                                                                                                                               |
 
 Baseline before this pass (same machine, 2026-10-25): 198/198 tests in 14
 files. The earlier review snapshot (215 tests / 16 files) and the older docs

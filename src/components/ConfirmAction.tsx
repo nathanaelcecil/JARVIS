@@ -15,23 +15,40 @@ interface ConfirmActionProps {
 export function ConfirmAction({ tool, args, onApprove, onDeny }: ConfirmActionProps) {
   const [decided, setDecided] = useState(false);
 
-  const handleApprove = () => { setDecided(true); onApprove(); };
-  const handleDeny = () => { setDecided(true); onDeny(); };
+  const handleApprove = () => {
+    setDecided(true);
+    onApprove();
+  };
+  const handleDeny = () => {
+    setDecided(true);
+    onDeny();
+  };
 
   if (decided) return null;
 
   const toolNames: Record<string, string> = {
-    open_app: "Open Application", quit_app: "Quit Application",
-    set_volume: "Set Volume", set_brightness: "Set Brightness",
-    open_in_finder: "Open in Finder", run_command: "Run Command",
-    browser_click: "Click Element", browser_type: "Type in Field",
-    browser_fill_form: "Fill Form", browser_download: "Download File",
-    control_click: "Click on Screen", control_type: "Type on Screen",
-    control_key: "Press Keys", control_scroll: "Scroll Window",
-    control_drag: "Drag on Screen", control_menu: "Use Menu",
-    control_place: "Move Window", control_focus: "Bring App to Front",
-    gh_create_branch: "Create Branch", gh_create_file: "Create/Update File",
-    gh_create_issue: "Create Issue", gh_create_pr: "Create Pull Request",
+    open_app: "Open Application",
+    quit_app: "Quit Application",
+    set_volume: "Set Volume",
+    set_brightness: "Set Brightness",
+    open_in_finder: "Open in Finder",
+    run_command: "Run Command",
+    browser_click: "Click Element",
+    browser_type: "Type in Field",
+    browser_fill_form: "Fill Form",
+    browser_download: "Download File",
+    control_click: "Click on Screen",
+    control_type: "Type on Screen",
+    control_key: "Press Keys",
+    control_scroll: "Scroll Window",
+    control_drag: "Drag on Screen",
+    control_menu: "Use Menu",
+    control_place: "Move Window",
+    control_focus: "Bring App to Front",
+    gh_create_branch: "Create Branch",
+    gh_create_file: "Create/Update File",
+    gh_create_issue: "Create Issue",
+    gh_create_pr: "Create Pull Request",
     gh_create_comment: "Add Comment",
   };
 
@@ -67,8 +84,18 @@ export function ConfirmAction({ tool, args, onApprove, onDeny }: ConfirmActionPr
         </pre>
       )}
       <div className="flex gap-2">
-        <button onClick={handleApprove} className="flex-1 px-3 py-1.5 bg-hud-amber/20 hover:bg-hud-amber/30 text-hud-amber border border-hud-amber/40 rounded text-sm font-medium transition-colors">Approve</button>
-        <button onClick={handleDeny} className="flex-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 border border-white/20 rounded text-sm font-medium transition-colors">Deny</button>
+        <button
+          onClick={handleApprove}
+          className="flex-1 px-3 py-1.5 bg-hud-amber/20 hover:bg-hud-amber/30 text-hud-amber border border-hud-amber/40 rounded text-sm font-medium transition-colors"
+        >
+          Approve
+        </button>
+        <button
+          onClick={handleDeny}
+          className="flex-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 border border-white/20 rounded text-sm font-medium transition-colors"
+        >
+          Deny
+        </button>
       </div>
     </div>
   );

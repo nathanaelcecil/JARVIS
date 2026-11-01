@@ -27,6 +27,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { handsReadWindow } from "./hands";
+import { scrollUntilVisible } from "./parity";
 
 /** Override the control helper location (tests substitute a fake). */
 export const CONTROL_BIN_ENV = "JARVIS_HANDS_CONTROL_BIN";
@@ -323,10 +324,7 @@ export function controlFocus(args: { pid: number; title?: string }): Promise<unk
 }
 
 /** Addressable controls in a window — the model's map for labelled clicks. */
-export function controlMap(args: {
-  pid: number;
-  windowIndex?: number;
-}): Promise<unknown> {
+export function controlMap(args: { pid: number; windowIndex?: number }): Promise<unknown> {
   const argv = ["map", "--pid", String(args.pid)];
   if (args.windowIndex !== undefined) argv.push("--window-index", String(args.windowIndex));
   return callControl("control_map", argv);
@@ -335,4 +333,41 @@ export function controlMap(args: {
 /** Permission report for the control helper (Accessibility / Screen Recording). */
 export function controlStatus(): Promise<unknown> {
   return callControl("control_status", ["permissions"]);
+}
+
+/**
+ * Scroll a window until some words are visible.
+ *
+ * The loop is the tested pure part (`scrollUntilVisible`); this wires it to the
+ * real observation helper for reading and the control helper for scrolling,
+ * and reports honestly when the text never shows up.
+ */
+export async function controlScrollTo(args: {
+  pid: number;
+  text: string;
+  direction?: "down" | "up";
+  maxSteps?: number;
+}): Promise<unknown> {
+  const outcome = await scrollUntilVisible(args.text, {
+    read: async () => {
+      const window = (await handsReadWindow({ pid: args.pid })) as Record<string, unknown>;
+      return typeof window["text"] === "string" ? window["text"] : null;
+    },
+    scroll: (dy) =>
+      controlScroll({ dy, pid: args.pid }).then((result) => {
+        // A scroll that itself failed must stop the loop rather than repeat it
+        // 20 times against a window that is not there.
+        const failed = (result as Record<string, unknown>)?.["ok"] === false;
+        if (failed) throw new Error("scroll failed");
+        return result;
+      }),
+    ...(args.direction ? { direction: args.direction } : {}),
+    ...(args.maxSteps !== undefined ? { maxSteps: args.maxSteps } : {}),
+  });
+
+  return {
+    ok: outcome.found,
+    tool: "control_scroll_to",
+    ...outcome,
+  };
 }

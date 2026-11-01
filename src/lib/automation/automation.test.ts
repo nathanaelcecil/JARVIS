@@ -20,7 +20,14 @@ import {
   popOutbox,
   removeRoutine,
 } from "./routines";
-import { addWatch, describeWatch, evaluateWatch, listWatches, pollWatches, type Watch } from "./watches";
+import {
+  addWatch,
+  describeWatch,
+  evaluateWatch,
+  listWatches,
+  pollWatches,
+  type Watch,
+} from "./watches";
 import {
   forgetProcedure,
   isReplaySafe,
@@ -134,9 +141,9 @@ describe("schedule parsing", () => {
   it("describes itself in words", () => {
     expect(describeRecurrence({ kind: "interval", minutes: 30 })).toBe("every 30 minutes");
     expect(describeRecurrence({ kind: "interval", minutes: 120 })).toBe("every 2 hours");
-    expect(
-      describeRecurrence({ kind: "daily", hour: 8, minute: 5, weekdaysOnly: true }),
-    ).toBe("every weekday at 08:05");
+    expect(describeRecurrence({ kind: "daily", hour: 8, minute: 5, weekdaysOnly: true })).toBe(
+      "every weekday at 08:05",
+    );
     expect(describeRecurrence({ kind: "weekly", weekday: 3, hour: 17, minute: 0 })).toBe(
       "every wednesday at 17:00",
     );
@@ -280,7 +287,9 @@ describe("watch evaluation", () => {
     const spec = { kind: "command", command: "test -f /tmp/done" } as const;
     expect(evaluateWatch(watch(spec), { kind: "command", exitCode: 1 }).fire).toBe(false);
     expect(evaluateWatch(watch(spec), { kind: "command", exitCode: 0 }).fire).toBe(true);
-    expect(evaluateWatch(watch(spec, "present"), { kind: "command", exitCode: 0 }).fire).toBe(false);
+    expect(evaluateWatch(watch(spec, "present"), { kind: "command", exitCode: 0 }).fire).toBe(
+      false,
+    );
     expect(evaluateWatch(watch(spec), { kind: "command", exitCode: null }).fire).toBe(false);
   });
 

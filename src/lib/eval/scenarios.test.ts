@@ -439,8 +439,9 @@ describe("scenario: screen contents are data, never commands", () => {
 
   it("keeps every acting tool behind a confirm tier", () => {
     // The strength of the hands_/control_ split only holds if nothing that acts
-    // is reachable as an auto-tier tool. control_map and control_status read;
-    // everything else must be confirm (an approval token is required).
+    // is reachable as an auto-tier tool. control_map and control_status read the
+    // screen, control_wait only passes time; everything else must be confirm
+    // (an approval token is required).
     const acting = Object.keys(TOOLS).filter((t) => t.startsWith("control_"));
     expect(acting.sort()).toEqual([
       "control_click",
@@ -451,16 +452,14 @@ describe("scenario: screen contents are data, never commands", () => {
       "control_menu",
       "control_place",
       "control_scroll",
+      "control_scroll_to",
       "control_status",
       "control_type",
+      "control_wait",
     ]);
+    const readOnly = new Set(["control_map", "control_status", "control_wait"]);
     for (const tool of acting) {
-      const tier = TOOL_TIERS[tool];
-      if (tool === "control_map" || tool === "control_status") {
-        expect(tier).toBe("auto");
-      } else {
-        expect(tier).toBe("confirm");
-      }
+      expect(TOOL_TIERS[tool], tool).toBe(readOnly.has(tool) ? "auto" : "confirm");
     }
   });
 });

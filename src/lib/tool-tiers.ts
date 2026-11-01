@@ -41,6 +41,9 @@ export const TOOL_TIERS: Record<string, ToolTier> = {
   // `control_status` only read (addressable controls, permission state) and are
   // auto-tier like the other observation tools.
   control_map: "auto",
+  control_wait: "auto",
+  control_scroll_to: "confirm",
+  open_settings: "confirm",
   control_status: "auto",
   control_click: "confirm",
   control_type: "confirm",

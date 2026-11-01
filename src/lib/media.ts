@@ -37,10 +37,7 @@ function drawToDataUrl(
 }
 
 /** Downscale an image file to a JPEG data URL (<= maxDim px on the long edge). */
-export async function downscaleImage(
-  file: File,
-  maxDim: number = MAX_IMAGE_DIM,
-): Promise<string> {
+export async function downscaleImage(file: File, maxDim: number = MAX_IMAGE_DIM): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -126,10 +123,7 @@ export async function sampleVideoFrames(
   const frames: FrameSample[] = [];
   try {
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error("video metadata timeout")),
-        15_000,
-      );
+      const timer = setTimeout(() => reject(new Error("video metadata timeout")), 15_000);
       video.onloadedmetadata = () => {
         clearTimeout(timer);
         resolve();
@@ -152,12 +146,7 @@ export async function sampleVideoFrames(
       const t = Math.min(duration - 0.05, ((i + 0.5) / count) * duration);
       await seekTo(video, t);
       frames.push({
-        dataUrl: drawToDataUrl(
-          video,
-          video.videoWidth,
-          video.videoHeight,
-          MAX_FRAME_DIM,
-        ),
+        dataUrl: drawToDataUrl(video, video.videoWidth, video.videoHeight, MAX_FRAME_DIM),
         timeSeconds: t,
       });
     }

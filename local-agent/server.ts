@@ -36,6 +36,7 @@ import {
   handsReadScreen,
 } from "./tools/hands";
 import { spotlightSearch, contactsSearch, spotifyControl, spotifyStatus } from "./tools/mac";
+import { openSettings, wait } from "./tools/parity";
 import {
   controlClick,
   controlType,
@@ -46,6 +47,7 @@ import {
   controlPlace,
   controlFocus,
   controlMap,
+  controlScrollTo,
   controlStatus,
 } from "./tools/control";
 import {
@@ -165,6 +167,16 @@ export const TOOLS: Record<string, ToolHandler> = {
   control_focus: (args) => controlFocus(args as Parameters<typeof controlFocus>[0]),
   control_map: (args) => controlMap(args as Parameters<typeof controlMap>[0]),
   control_status: () => controlStatus(),
+  control_wait: async (args, signal) => {
+    const seconds = (args as { seconds?: number }).seconds ?? 1;
+    await wait(seconds, signal);
+    return { ok: true, tool: "control_wait", waited: seconds };
+  },
+  control_scroll_to: (args) =>
+    controlScrollTo(
+      args as { pid: number; text: string; direction?: "down" | "up"; maxSteps?: number },
+    ),
+  open_settings: (args) => openSettings(args as { pane: string }),
 
   // macOS integrations
   spotlight_search: (args) =>

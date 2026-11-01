@@ -43,7 +43,8 @@ interface ProceduresFile {
 const EMPTY: ProceduresFile = { version: 1, procedures: [] };
 
 /** Words that never belong in a replayable step. */
-const DESTRUCTIVE = /\b(rm|rmdir|sudo|mkfs|dd|shutdown|reboot|halt|diskutil|erase|format|uninstall|git push)\b/i;
+const DESTRUCTIVE =
+  /\b(rm|rmdir|sudo|mkfs|dd|shutdown|reboot|halt|diskutil|erase|format|uninstall|git push)\b/i;
 const DESTRUCTIVE_TOOLS = /^(system\.shutdown|git\.push)$/i;
 
 /**
@@ -61,9 +62,7 @@ export function normalizeTrigger(text: string): string {
     .trim();
 }
 
-export type ReplayVerdict =
-  | { safe: true }
-  | { safe: false; reason: string; stepIndex?: number };
+export type ReplayVerdict = { safe: true } | { safe: false; reason: string; stepIndex?: number };
 
 /**
  * Decide whether a step list may be stored and replayed.
@@ -141,7 +140,9 @@ export async function recordProcedure(params: {
     }
     // A re-recording keeps its usage history: it is the same phrase.
     const previous = procedures.find((entry) => entry.key === key);
-    const merged = previous ? { ...procedure, uses: previous.uses, createdAt: previous.createdAt } : procedure;
+    const merged = previous
+      ? { ...procedure, uses: previous.uses, createdAt: previous.createdAt }
+      : procedure;
     return { version: 1, procedures: [...without, merged] };
   });
 

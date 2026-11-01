@@ -5,13 +5,7 @@
  * Pure Canvas2D with additive compositing — no WebGL dependency.
  */
 
-export type JarvisState =
-  | "idle"
-  | "listening"
-  | "thinking"
-  | "speaking"
-  | "burst"
-  | "system";
+export type JarvisState = "idle" | "listening" | "thinking" | "speaking" | "burst" | "system";
 
 type StateProfile = {
   activity: number; // global motion multiplier
@@ -25,12 +19,66 @@ type StateProfile = {
 };
 
 const PROFILES: Record<JarvisState, StateProfile> = {
-  idle: { activity: 0.55, coreGlow: 0.85, pulseInterval: 6.2, filament: 0.55, inflow: 0, density: 0.9, geometry: 0.15, burstRate: 0.02 },
-  listening: { activity: 0.75, coreGlow: 1.05, pulseInterval: 3.6, filament: 0.7, inflow: 0.75, density: 1, geometry: 0.15, burstRate: 0.04 },
-  thinking: { activity: 1.35, coreGlow: 1.25, pulseInterval: 2.2, filament: 1.15, inflow: 0.25, density: 1.15, geometry: 0.3, burstRate: 0.08 },
-  speaking: { activity: 1, coreGlow: 1.2, pulseInterval: 1.35, filament: 1, inflow: 0, density: 1.05, geometry: 0.2, burstRate: 0.05 },
-  burst: { activity: 1.9, coreGlow: 1.75, pulseInterval: 0.85, filament: 1.6, inflow: 0.4, density: 1.4, geometry: 0.35, burstRate: 0.55 },
-  system: { activity: 0.9, coreGlow: 1, pulseInterval: 3, filament: 0.95, inflow: 0.1, density: 1, geometry: 1, burstRate: 0.05 },
+  idle: {
+    activity: 0.55,
+    coreGlow: 0.85,
+    pulseInterval: 6.2,
+    filament: 0.55,
+    inflow: 0,
+    density: 0.9,
+    geometry: 0.15,
+    burstRate: 0.02,
+  },
+  listening: {
+    activity: 0.75,
+    coreGlow: 1.05,
+    pulseInterval: 3.6,
+    filament: 0.7,
+    inflow: 0.75,
+    density: 1,
+    geometry: 0.15,
+    burstRate: 0.04,
+  },
+  thinking: {
+    activity: 1.35,
+    coreGlow: 1.25,
+    pulseInterval: 2.2,
+    filament: 1.15,
+    inflow: 0.25,
+    density: 1.15,
+    geometry: 0.3,
+    burstRate: 0.08,
+  },
+  speaking: {
+    activity: 1,
+    coreGlow: 1.2,
+    pulseInterval: 1.35,
+    filament: 1,
+    inflow: 0,
+    density: 1.05,
+    geometry: 0.2,
+    burstRate: 0.05,
+  },
+  burst: {
+    activity: 1.9,
+    coreGlow: 1.75,
+    pulseInterval: 0.85,
+    filament: 1.6,
+    inflow: 0.4,
+    density: 1.4,
+    geometry: 0.35,
+    burstRate: 0.55,
+  },
+  system: {
+    activity: 0.9,
+    coreGlow: 1,
+    pulseInterval: 3,
+    filament: 0.95,
+    inflow: 0.1,
+    density: 1,
+    geometry: 1,
+    burstRate: 0.05,
+  },
 };
 
 /* ---------------- utilities ---------------- */
@@ -50,14 +98,22 @@ type V3 = { x: number; y: number; z: number };
 
 function rot(p: V3, ax: number, ay: number, az: number): V3 {
   let { x, y, z } = p;
-  let c = Math.cos(ax), s = Math.sin(ax);
-  let y1 = y * c - z * s, z1 = y * s + z * c;
-  y = y1; z = z1;
-  c = Math.cos(ay); s = Math.sin(ay);
-  let x1 = x * c + z * s; z1 = -x * s + z * c;
-  x = x1; z = z1;
-  c = Math.cos(az); s = Math.sin(az);
-  const x2 = x * c - y * s, y2 = x * s + y * c;
+  let c = Math.cos(ax),
+    s = Math.sin(ax);
+  const y1 = y * c - z * s;
+  let z1 = y * s + z * c;
+  y = y1;
+  z = z1;
+  c = Math.cos(ay);
+  s = Math.sin(ay);
+  const x1 = x * c + z * s;
+  z1 = -x * s + z * c;
+  x = x1;
+  z = z1;
+  c = Math.cos(az);
+  s = Math.sin(az);
+  const x2 = x * c - y * s,
+    y2 = x * s + y * c;
   return { x: x2, y: y2, z };
 }
 
@@ -404,7 +460,12 @@ export class JarvisCoreEngine {
       for (let i = 0; i < deb; i++) {
         const ang = rnd() * 6.283;
         const rr = r * (0.94 + rnd() * 0.12);
-        const p = rot({ x: Math.cos(ang) * rr, y: (rnd() - 0.5) * 0.03, z: Math.sin(ang) * rr }, tilt.x, tilt.y, tilt.z);
+        const p = rot(
+          { x: Math.cos(ang) * rr, y: (rnd() - 0.5) * 0.03, z: Math.sin(ang) * rr },
+          tilt.x,
+          tilt.y,
+          tilt.z,
+        );
         this.particles.push({
           p,
           base: rr,
@@ -435,7 +496,9 @@ export class JarvisCoreEngine {
             : 1.06 + rnd() * 0.22; // slightly outside
       // reject against the asymmetry field using the arc midpoint direction
       const mid = a0 + len * 0.5;
-      const d = this.norm(rot({ x: Math.cos(mid), y: 0, z: Math.sin(mid) }, tilt.x, tilt.y, tilt.z));
+      const d = this.norm(
+        rot({ x: Math.cos(mid), y: 0, z: Math.sin(mid) }, tilt.x, tilt.y, tilt.z),
+      );
       if (rnd() > Math.min(1, weight(d) / 1.5)) continue;
       this.segs.push({
         a0,
@@ -450,7 +513,6 @@ export class JarvisCoreEngine {
         flare: rnd(),
       });
     }
-
 
     // --- neural / data filaments
     const FIL = 760;
@@ -510,7 +572,11 @@ export class JarvisCoreEngine {
         let bc = { ...from };
         const bs = 2 + Math.floor(rnd() * 5);
         for (let s = 0; s < bs; s++) {
-          bd = this.norm({ x: bd.x + (rnd() - 0.5) * 0.9, y: bd.y + (rnd() - 0.5) * 0.9, z: bd.z + (rnd() - 0.5) * 0.9 });
+          bd = this.norm({
+            x: bd.x + (rnd() - 0.5) * 0.9,
+            y: bd.y + (rnd() - 0.5) * 0.9,
+            z: bd.z + (rnd() - 0.5) * 0.9,
+          });
           const st = 0.05 + rnd() * 0.13;
           bc = { x: bc.x + bd.x * st, y: bc.y + bd.y * st, z: bc.z + bd.z * st };
           bp.push(bc);
@@ -642,7 +708,6 @@ export class JarvisCoreEngine {
       size: 0.4 + Math.random() * 1.4,
       bright: 0.5 + Math.random() * 0.6,
     });
-
   }
 
   /* ---------------- rendering ---------------- */
@@ -661,7 +726,6 @@ export class JarvisCoreEngine {
     const par = this.pActive * 0.018 * z2;
     return { sx: x1 * f + this.pxn * par, sy: y1 * f + this.pyn * par, depth: f, z: z2 };
   }
-
 
   private pulseBoost(r: number) {
     let b = 0;
@@ -760,7 +824,8 @@ export class JarvisCoreEngine {
 
       const spin = q.spin * (0.35 + c.activity);
       // inflow: listening pulls outer material toward the nucleus
-      const draw = c.inflow * 0.14 * Math.max(0, q.layer - 0.5) * (0.6 + 0.4 * Math.sin(t * 0.9 + q.phase));
+      const draw =
+        c.inflow * 0.14 * Math.max(0, q.layer - 0.5) * (0.6 + 0.4 * Math.sin(t * 0.9 + q.phase));
       const wob = Math.sin(t * q.wob + q.phase) * 0.012 * (1 + q.layer * 0.6);
       const scale = 1 - draw + wob;
       const p = rot(
@@ -797,7 +862,6 @@ export class JarvisCoreEngine {
           heat += prox * 0.35;
         }
       }
-
 
       const x = pr.sx * R;
       const y = pr.sy * R;
@@ -844,7 +908,12 @@ export class JarvisCoreEngine {
       const steps = Math.max(3, Math.ceil((sg.a1 - sg.a0) * 26));
       // compute midpoint depth to decide front/back
       const mid = (sg.a0 + sg.a1) * 0.5 + rot0;
-      const mp = rot({ x: Math.cos(mid) * sg.r, y: 0, z: Math.sin(mid) * sg.r }, sg.tilt.x, sg.tilt.y, sg.tilt.z);
+      const mp = rot(
+        { x: Math.cos(mid) * sg.r, y: 0, z: Math.sin(mid) * sg.r },
+        sg.tilt.x,
+        sg.tilt.y,
+        sg.tilt.z,
+      );
       const mz = this.project(mp).z;
       if (front !== mz > 0) continue;
 
@@ -859,7 +928,11 @@ export class JarvisCoreEngine {
         const ang = sg.a0 + ((sg.a1 - sg.a0) * i) / steps + rot0;
         const wob = 1 + Math.sin(ang * 7 + sg.jitter + t * 0.3) * 0.018;
         const p = rot(
-          { x: Math.cos(ang) * sg.r * wob, y: Math.sin(ang * 3 + sg.jitter) * 0.012, z: Math.sin(ang) * sg.r * wob },
+          {
+            x: Math.cos(ang) * sg.r * wob,
+            y: Math.sin(ang * 3 + sg.jitter) * 0.012,
+            z: Math.sin(ang) * sg.r * wob,
+          },
           sg.tilt.x,
           sg.tilt.y,
           sg.tilt.z,
@@ -890,7 +963,12 @@ export class JarvisCoreEngine {
       if (front !== first.z > -0.05) continue;
 
       const boost = this.pulseBoost(f.reach * 0.6);
-      let a = f.bright * env * c.filament * (0.3 + energy * 0.5) * (1 + boost * 1.4 + this.burstEnergy * 0.5);
+      let a =
+        f.bright *
+        env *
+        c.filament *
+        (0.3 + energy * 0.5) *
+        (1 + boost * 1.4 + this.burstEnergy * 0.5);
       a *= front ? 1 : 0.42;
       if (a < 0.015) continue;
 
@@ -946,7 +1024,7 @@ export class JarvisCoreEngine {
     const n = 58;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * 6.283 * 3 + t * (0.5 + (i % 5) * 0.25);
-      const rr = R * (0.04 + ((i * 37) % 100) / 100 * 0.22) * pump;
+      const rr = R * (0.04 + (((i * 37) % 100) / 100) * 0.22) * pump;
       const x = Math.cos(a) * rr;
       const y = Math.sin(a * 1.3 + i) * rr * 0.8;
       const s = 1 + ((i * 13) % 7) * 0.55;
@@ -976,7 +1054,8 @@ export class JarvisCoreEngine {
       const len = Math.min(14, Math.hypot(s.v.x, s.v.y) * 26 * pr.depth);
       ctx.strokeStyle = amber(0.95, a);
       ctx.lineWidth = Math.max(0.4, s.size * 0.4 * pr.depth);
-      const dx = s.v.x, dy = s.v.y;
+      const dx = s.v.x,
+        dy = s.v.y;
       const l = Math.hypot(dx, dy) || 1;
       ctx.beginPath();
       ctx.moveTo(x, y);

@@ -49,7 +49,10 @@ export async function writeJson(root: string, name: string, value: unknown): Pro
   const file = storeFile(root, name);
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf-8", mode: 0o600 });
+  await fs.writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
   await fs.rename(tmp, file);
 }
 

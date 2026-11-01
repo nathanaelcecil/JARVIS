@@ -41,6 +41,9 @@ const PERMISSIONS: Record<string, Permission> = {
   // presses keys, scrolls, drags, opens a menu, moves a window or raises an app
   // requires an explicit user approval.
   "control.map": "auto",
+  "control.wait": "auto",
+  "control.scroll_to": "confirm",
+  "settings.open": "confirm",
   "control.status": "auto",
   "control.click": "confirm",
   "control.type": "confirm",
@@ -206,6 +209,9 @@ export function toolPermissionCategory(toolName: string): string {
     hands_look: "hands.look",
     hands_read_screen: "hands.read_screen",
     control_map: "control.map",
+    control_wait: "control.wait",
+    control_scroll_to: "control.scroll_to",
+    open_settings: "settings.open",
     control_status: "control.status",
     control_click: "control.click",
     control_type: "control.type",

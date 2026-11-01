@@ -10,10 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { authorizeToolCall, decideToolTier } from "./tool-authorization";
-import {
-  pendingConfirmationCount,
-  resolveConfirmation,
-} from "./confirmations";
+import { pendingConfirmationCount, resolveConfirmation } from "./confirmations";
 import { NonceStore, verifyApprovalToken } from "../../local-agent/approval";
 
 const root = mkdtempSync(join(tmpdir(), "jarvis-auth-"));
@@ -48,9 +45,7 @@ describe("decideToolTier", () => {
     const decision = decideToolTier("system.shutdown");
     expect(decision.allowed).toBe(false);
     expect(decision.tier).toBe("never");
-    expect(decision.message).toBe(
-      "Tool blocked by security policy: system.shutdown (tier: never)",
-    );
+    expect(decision.message).toBe("Tool blocked by security policy: system.shutdown (tier: never)");
   });
 
   it("defaults unknown tools to confirm", () => {

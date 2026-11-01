@@ -30,14 +30,10 @@ let ticking = false;
 export function ensureProactiveScheduler(): void {
   if (timer) return;
   timer = setInterval(() => {
-    runProactiveTick().catch((err) =>
-      console.error("[Proactive] tick failed:", err)
-    );
+    runProactiveTick().catch((err) => console.error("[Proactive] tick failed:", err));
   }, TICK_MS);
   console.log(`[Proactive] scheduler started (tick ${TICK_MS}ms)`);
-  runProactiveTick().catch((err) =>
-    console.error("[Proactive] initial tick failed:", err)
-  );
+  runProactiveTick().catch((err) => console.error("[Proactive] initial tick failed:", err));
 }
 
 /** Stop the scheduler (used by tests / shutdown). */
@@ -68,14 +64,9 @@ export async function runProactiveTick(): Promise<number> {
         const claimed = await claimSchedule(schedule);
         if (!claimed) continue;
         await deliverSchedule(schedule);
-        console.log(
-          `[Proactive] fired ${schedule.kind} schedule ${schedule.id.slice(0, 8)}`
-        );
+        console.log(`[Proactive] fired ${schedule.kind} schedule ${schedule.id.slice(0, 8)}`);
       } catch (err) {
-        console.error(
-          `[Proactive] failed to fire schedule ${schedule.id}:`,
-          err
-        );
+        console.error(`[Proactive] failed to fire schedule ${schedule.id}:`, err);
       }
     }
     // Automation (routines + watches) rides the same tick. It is file-backed,
@@ -86,7 +77,7 @@ export async function runProactiveTick(): Promise<number> {
       const automation = await runAutomationTick(process.cwd(), now);
       if (automation.routines > 0 || automation.watches > 0) {
         console.log(
-          `[Automation] fired ${automation.routines} routine(s), ${automation.watches} watch(es)`
+          `[Automation] fired ${automation.routines} routine(s), ${automation.watches} watch(es)`,
         );
       }
     } catch (err) {
@@ -129,17 +120,14 @@ async function deliverSchedule(schedule: ProactiveSchedule): Promise<void> {
 /** Fire a macOS notification banner. Best-effort — never throws. */
 function fireBanner(message: string): void {
   try {
-    const safe = message
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, '\\"')
-      .slice(0, 200);
+    const safe = message.replace(/\\/g, "\\\\").replace(/"/g, '\\"').slice(0, 200);
     execFile(
       "osascript",
       ["-e", `display notification "${safe}" with title "JARVIS" sound name "Glass"`],
       { timeout: 5000 },
       (err) => {
         if (err) console.warn("[Proactive] banner failed:", err.message);
-      }
+      },
     );
   } catch (err) {
     console.warn("[Proactive] banner spawn failed:", err);

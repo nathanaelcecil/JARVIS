@@ -6,7 +6,25 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  // Only this app's own sources are linted. Without these ignores `eslint .`
+  // walks the Python venv, the model directory and built helper bundles, which
+  // made a full lint take minutes instead of seconds.
+  {
+    ignores: [
+      "dist",
+      ".output",
+      ".vinxi",
+      ".xtts-venv",
+      "models",
+      "coverage",
+      ".jarvis",
+      "native",
+      "local-agent/node_modules",
+      "vscode-extension/out",
+      "vscode-extension/node_modules",
+      "vscode-extension/.vscode-test",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -35,6 +53,13 @@ export default tseslint.config(
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
     },
+  },
+  {
+    // Vendored shadcn/ui primitives intentionally export their variants and
+    // helpers next to the component (that is how they are generated and
+    // updated). Fast Refresh still works for the app's own components.
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: { "react-refresh/only-export-components": "off" },
   },
   eslintPluginPrettier,
 );

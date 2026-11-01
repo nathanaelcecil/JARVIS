@@ -20,16 +20,13 @@ export const Route = createFileRoute("/api/proactive")({
         const blocked = guardLocalRequest(request);
         if (blocked) return blocked;
         try {
-          const { ensureProactiveScheduler, runProactiveTick } = await import(
-            "../../lib/proactive/scheduler"
-          );
+          const { ensureProactiveScheduler, runProactiveTick } =
+            await import("../../lib/proactive/scheduler");
           ensureProactiveScheduler();
           // Don't wait a full 15s for a message that may already be due
           await runProactiveTick();
 
-          const { getPendingMessages } = await import(
-            "../../functions/proactive"
-          );
+          const { getPendingMessages } = await import("../../functions/proactive");
           const messages = await getPendingMessages();
 
           // Routine prompts are drained separately: they are requests to run,
@@ -48,7 +45,7 @@ export const Route = createFileRoute("/api/proactive")({
           console.error("[Proactive] poll failed:", err);
           return Response.json(
             { error: err instanceof Error ? err.message : "poll failed" },
-            { status: 500 }
+            { status: 500 },
           );
         }
       },
@@ -68,15 +65,10 @@ export const Route = createFileRoute("/api/proactive")({
           };
 
           if (!jobId || typeof exitCode !== "number") {
-            return Response.json(
-              { error: "Missing jobId or exitCode" },
-              { status: 400 }
-            );
+            return Response.json({ error: "Missing jobId or exitCode" }, { status: 400 });
           }
 
-          const { reportTaskCompletion } = await import(
-            "../../functions/proactive"
-          );
+          const { reportTaskCompletion } = await import("../../functions/proactive");
           const schedule = await reportTaskCompletion({
             jobId,
             label: label ?? jobId,
@@ -85,9 +77,7 @@ export const Route = createFileRoute("/api/proactive")({
           });
 
           // Fire it right away instead of waiting for the 15s tick
-          const { runProactiveTick } = await import(
-            "../../lib/proactive/scheduler"
-          );
+          const { runProactiveTick } = await import("../../lib/proactive/scheduler");
           await runProactiveTick();
 
           return Response.json({ success: true, scheduleId: schedule.id });
@@ -95,7 +85,7 @@ export const Route = createFileRoute("/api/proactive")({
           console.error("[Proactive] task callback failed:", err);
           return Response.json(
             { error: err instanceof Error ? err.message : "callback failed" },
-            { status: 500 }
+            { status: 500 },
           );
         }
       },

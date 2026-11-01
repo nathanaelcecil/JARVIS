@@ -50,8 +50,7 @@ export interface WindowObservation {
 }
 
 export type Observation =
-  | { kind: "window"; windows: WindowObservation[] }
-  | { kind: "command"; exitCode: number | null };
+  { kind: "window"; windows: WindowObservation[] } | { kind: "command"; exitCode: number | null };
 
 interface WatchesFile {
   version: 1;
@@ -75,7 +74,12 @@ export interface WatchEvaluation {
 export function evaluateWatch(watch: Watch, observation: Observation): WatchEvaluation {
   if (watch.spec.kind === "window") {
     if (observation.kind !== "window") {
-      return { fire: false, state: watch.state, confirmed: watch.confirmed, skip: "wrong observation" };
+      return {
+        fire: false,
+        state: watch.state,
+        confirmed: watch.confirmed,
+        skip: "wrong observation",
+      };
     }
     const spec = watch.spec;
     const title = spec.title.toLowerCase();
@@ -105,15 +109,30 @@ export function evaluateWatch(watch: Watch, observation: Observation): WatchEval
         return { fire, state: present ? "present" : "absent", confirmed: present ? true : false };
       }
       default:
-        return { fire: false, state: watch.state, confirmed: watch.confirmed, skip: "unknown event" };
+        return {
+          fire: false,
+          state: watch.state,
+          confirmed: watch.confirmed,
+          skip: "unknown event",
+        };
     }
   }
 
   if (observation.kind !== "command") {
-    return { fire: false, state: watch.state, confirmed: watch.confirmed, skip: "wrong observation" };
+    return {
+      fire: false,
+      state: watch.state,
+      confirmed: watch.confirmed,
+      skip: "wrong observation",
+    };
   }
   if (observation.exitCode === null) {
-    return { fire: false, state: watch.state, confirmed: watch.confirmed, skip: "command did not run" };
+    return {
+      fire: false,
+      state: watch.state,
+      confirmed: watch.confirmed,
+      skip: "command did not run",
+    };
   }
   const passing = observation.exitCode === 0;
   // Fire on the transition into success, not on every tick while it holds.
@@ -133,7 +152,8 @@ export async function addWatch(params: {
 }): Promise<Watch> {
   const spec = params.spec;
   if (spec.kind === "window") {
-    if (!spec.title.trim()) throw new Error("a window watch needs some words from the window title");
+    if (!spec.title.trim())
+      throw new Error("a window watch needs some words from the window title");
     if (spec.title.length > MAX_TITLE_CHARS) {
       throw new Error(`the title words are too long (max ${MAX_TITLE_CHARS} characters)`);
     }
@@ -144,7 +164,7 @@ export async function addWatch(params: {
     if (!spec.command.trim()) throw new Error("a command watch needs a shell test");
     if (spec.command.includes("\u0000")) throw new Error("the command contains a NUL byte");
   } else {
-    throw new Error('a watch must be either a window watch or a command watch');
+    throw new Error("a watch must be either a window watch or a command watch");
   }
 
   const watch: Watch = {

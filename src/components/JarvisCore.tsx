@@ -35,5 +35,4 @@ export function JarvisCore({ state, offsetX = 0 }: { state: JarvisState; offsetX
       aria-hidden="true"
     />
   );
-
 }

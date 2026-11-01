@@ -121,11 +121,11 @@ share the pages/databases with it, and set `NOTION_API_KEY`.
 
 ### Keys JARVIS creates for you
 
-| File | Created by | Purpose |
-| --- | --- | --- |
-| `local-agent/.agent-secret` | first local-agent start (mode 0600) | bearer secret for `127.0.0.1:3008` |
+| File                        | Created by                          | Purpose                                                             |
+| --------------------------- | ----------------------------------- | ------------------------------------------------------------------- |
+| `local-agent/.agent-secret` | first local-agent start (mode 0600) | bearer secret for `127.0.0.1:3008`                                  |
 | `local-agent/.approval-key` | first local-agent start (mode 0600) | HMAC key that signs per-call approval tokens for confirm-tier tools |
-| `.jarvis/agent-token` | first `/api/agent` request | coding-agent control-plane token |
+| `.jarvis/agent-token`       | first `/api/agent` request          | coding-agent control-plane token                                    |
 
 Start the local agent once (`bun local-agent/server.ts`) to create the first
 two. All three are git-ignored — keep them out of anything you share.
@@ -230,13 +230,13 @@ open native/jarvis-menubar/bin/JARVISMenuBar.app
 
 It gives you:
 
-| Item | What it does |
-| --- | --- |
-| Open JARVIS | Opens the web UI |
-| Dictate… (⌃⌥D) | Records, transcribes through `/api/transcribe` (local whisper.cpp), then **types the text into the frontmost app** |
-| Wake word “Jarvis” | On-device speech recognition while idle; saying the word starts a dictation |
-| Draw on screen | Transparent overlay on every display — drag to draw an arrow; Esc clears, then closes |
-| Record meeting… | Records the mic and saves `<timestamp>.m4a` plus a `.md` transcript in `~/Documents/JARVIS/meetings` |
+| Item               | What it does                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Open JARVIS        | Opens the web UI                                                                                                   |
+| Dictate… (⌃⌥D)     | Records, transcribes through `/api/transcribe` (local whisper.cpp), then **types the text into the frontmost app** |
+| Wake word “Jarvis” | On-device speech recognition while idle; saying the word starts a dictation                                        |
+| Draw on screen     | Transparent overlay on every display — drag to draw an arrow; Esc clears, then closes                              |
+| Record meeting…    | Records the mic and saves `<timestamp>.m4a` plus a `.md` transcript in `~/Documents/JARVIS/meetings`               |
 
 First use asks for Microphone and Speech Recognition. Dictation types through
 `jarvis-hands-control`, so Accessibility must be granted for that helper (see
@@ -354,6 +354,7 @@ Your Python is probably 3.13+. Install 3.12 from <https://www.python.org> and
 rerun `start-jarvis.command`.
 
 **coqui-tts import failed**
+
 ```sh
 source .xtts-venv/bin/activate
 pip install --force-reinstall "coqui-tts[codec]" "transformers>=4.57,<5.1"
@@ -375,27 +376,27 @@ creates `.jarvis/agent-token`). Ensure `.jarvis/` is never committed.
 
 ## Environment variable reference
 
-| Variable | Purpose | Browser-safe? |
-| --- | --- | --- |
-| `VITE_SUPABASE_URL` | Supabase project URL | Yes |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key | Yes |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server DB access | **No** |
-| `OLLAMA_BASE_URL` | Ollama OpenAI-compatible endpoint | No |
-| `OLLAMA_KEEP_ALIVE` | Keep model loaded (`-1`) | No |
-| `OLLAMA_*_MODEL` | Per-route model overrides | No |
-| `XTTS_URL` | Local voice server | No |
-| `VOICE_SAMPLE_PATH` | Reference voice WAV | No |
-| `WHISPER_BIN` / `WHISPER_MODEL` | Local STT | No |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth | **No** |
-| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for stored Google tokens (required for Google) | **No** |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | Old key, accepted for re-encryption on rotation | **No** |
-| `JARVIS_APPROVAL_KEY_FILE` | Override the approval-key path | **No** |
-| `JARVIS_ALLOWED_ORIGINS` | Extra exact origins allowed to call local routes | No |
-| `JARVIS_HANDS_BIN` | Override the read-only screen helper path | No |
-| `NOTION_API_KEY` | Notion integration | **No** |
-| `LOCAL_AGENT_PORT` | Tool agent port (default 3008) | No |
-| `JARVIS_AGENT_MAX_ITERATIONS` | Coding-agent iteration cap (3–40) | No |
-| `JARVIS_AGENT_TIMEOUT_MS` | Coding-agent deadline | No |
+| Variable                                    | Purpose                                                        | Browser-safe? |
+| ------------------------------------------- | -------------------------------------------------------------- | ------------- |
+| `VITE_SUPABASE_URL`                         | Supabase project URL                                           | Yes           |
+| `VITE_SUPABASE_ANON_KEY`                    | Supabase anon key                                              | Yes           |
+| `SUPABASE_SERVICE_ROLE_KEY`                 | Server DB access                                               | **No**        |
+| `OLLAMA_BASE_URL`                           | Ollama OpenAI-compatible endpoint                              | No            |
+| `OLLAMA_KEEP_ALIVE`                         | Keep model loaded (`-1`)                                       | No            |
+| `OLLAMA_*_MODEL`                            | Per-route model overrides                                      | No            |
+| `XTTS_URL`                                  | Local voice server                                             | No            |
+| `VOICE_SAMPLE_PATH`                         | Reference voice WAV                                            | No            |
+| `WHISPER_BIN` / `WHISPER_MODEL`             | Local STT                                                      | No            |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth                                                   | **No**        |
+| `TOKEN_ENCRYPTION_KEY`                      | AES-256-GCM key for stored Google tokens (required for Google) | **No**        |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`             | Old key, accepted for re-encryption on rotation                | **No**        |
+| `JARVIS_APPROVAL_KEY_FILE`                  | Override the approval-key path                                 | **No**        |
+| `JARVIS_ALLOWED_ORIGINS`                    | Extra exact origins allowed to call local routes               | No            |
+| `JARVIS_HANDS_BIN`                          | Override the read-only screen helper path                      | No            |
+| `NOTION_API_KEY`                            | Notion integration                                             | **No**        |
+| `LOCAL_AGENT_PORT`                          | Tool agent port (default 3008)                                 | No            |
+| `JARVIS_AGENT_MAX_ITERATIONS`               | Coding-agent iteration cap (3–40)                              | No            |
+| `JARVIS_AGENT_TIMEOUT_MS`                   | Coding-agent deadline                                          | No            |
 
 ---
 

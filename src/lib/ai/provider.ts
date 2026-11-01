@@ -3,6 +3,8 @@
  * Swap providers by changing the class + config — not rewriting callers.
  */
 
+import { chooseModel, listInstalledModels } from "./ollama-models";
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string | ContentPart[];
@@ -87,6 +89,23 @@ export class OllamaProvider implements AIProvider {
    * ~1ms; when unloaded it runs concurrently with the actual chat request
    * (Ollama serializes loads), so it never adds latency.
    */
+  /**
+   * Use a model that is actually installed. A name in the router is a wish: if
+   * it was never pulled, every request would fail with "model not found".
+   * Discovery is cached for five minutes and a failed lookup is a no-op, so
+   * this costs one tiny request per five minutes in the normal case.
+   */
+  private async resolveModel(model: string): Promise<string> {
+    const installed = await listInstalledModels(this.baseUrl);
+    const chosen = chooseModel(model, installed);
+    if (chosen !== model) {
+      console.warn(
+        `[Provider] model "${model}" is not installed; using "${chosen}". Pull it with: ollama pull ${model}`,
+      );
+    }
+    return chosen;
+  }
+
   private pinModelKeepAlive(model: string): void {
     const now = Date.now();
     const last = pinnedAt.get(model);
@@ -110,7 +129,8 @@ export class OllamaProvider implements AIProvider {
     raw?: boolean;
     timeoutMs?: number;
   }): Promise<{ content: string; metadata?: ResponseMetadata }> {
-    const { messages, model, signal, temperature, raw: keepRaw, timeoutMs } = params;
+    const { messages, signal, temperature, raw: keepRaw, timeoutMs } = params;
+    const model = await this.resolveModel(params.model);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs ?? 120000);
@@ -168,7 +188,8 @@ export class OllamaProvider implements AIProvider {
     model: string;
     signal?: AbortSignal;
   }): AsyncGenerator<string, void, unknown> {
-    const { messages, model, signal } = params;
+    const { messages, signal } = params;
+    const model = await this.resolveModel(params.model);
 
     this.pinModelKeepAlive(model);
 

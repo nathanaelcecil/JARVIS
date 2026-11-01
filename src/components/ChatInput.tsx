@@ -199,9 +199,7 @@ export function ChatInput({
       if (saved && inputs.some((d) => d.deviceId === saved)) return saved;
       // Labels are only visible after a permission grant — filter empties.
       const usable = inputs.filter((d) => d.label && !/iPhone/i.test(d.label));
-      const builtIn = usable.find((d) =>
-        /MacBook|Built-in|Internal/i.test(d.label),
-      );
+      const builtIn = usable.find((d) => /MacBook|Built-in|Internal/i.test(d.label));
       return (builtIn ?? usable[0] ?? inputs[0])?.deviceId ?? null;
     } catch {
       return null;
@@ -283,9 +281,7 @@ export function ChatInput({
         doSend(transcript);
       } catch (err) {
         console.error("[Mic] transcribe failed:", err);
-        showMicError(
-          `Mic: ${err instanceof Error ? err.message : "transcription failed"}`,
-        );
+        showMicError(`Mic: ${err instanceof Error ? err.message : "transcription failed"}`);
       } finally {
         setIsTranscribing(false);
         micBusyRef.current = false; // cycle complete — mic may start again
@@ -356,9 +352,7 @@ export function ChatInput({
     } catch (err) {
       console.error("[Mic] MediaRecorder failed:", err);
       cleanupMic();
-      failStart(
-        `Mic: ${err instanceof Error ? err.message : "could not start recording"}`,
-      );
+      failStart(`Mic: ${err instanceof Error ? err.message : "could not start recording"}`);
       return;
     }
 
@@ -492,9 +486,7 @@ export function ChatInput({
               </button>
             </span>
           ))}
-          {attachError && (
-            <span className="hud-mono text-[9px] text-red-400">{attachError}</span>
-          )}
+          {attachError && <span className="hud-mono text-[9px] text-red-400">{attachError}</span>}
         </div>
       )}
 

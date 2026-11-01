@@ -278,6 +278,18 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
+# Menu-bar app: dictation (⌃⌥D), wake word, drawing overlay, meetings.
+# It is optional — the chat works without it — so a missing build is a note,
+# never a startup failure.
+MENUBAR_APP="$PWD/native/jarvis-menubar/bin/JARVISMenuBar.app"
+if [ -d "$MENUBAR_APP" ]; then
+    open "$MENUBAR_APP"
+    echo "      Menu-bar app launched (menu item \"J\")."
+else
+    echo "      Menu-bar app not built — optional. Build it with:"
+    echo "        ./native/jarvis-menubar/build.command"
+fi
+
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║   JARVIS is running!                ║"

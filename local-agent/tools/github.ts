@@ -36,11 +36,16 @@ async function githubFetch<T = unknown>(
     body?: unknown;
     accept?: string;
     signal?: AbortSignal;
-  } = {}
+  } = {},
 ): Promise<GitHubResponse<T>> {
   const token = getToken();
   if (!token) {
-    return { ok: false, status: 0, data: null, error: "No GitHub PAT configured. Set GITHUB_PAT env var." };
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      error: "No GitHub PAT configured. Set GITHUB_PAT env var.",
+    };
   }
 
   const url = path.startsWith("http") ? path : `https://api.github.com${path}`;
@@ -119,7 +124,17 @@ export async function listRepos(args: {
   type?: string;
   sort?: string;
   per_page?: number;
-}): Promise<{ success: boolean; repos: Array<{ name: string; full_name: string; description: string; url: string; private: boolean }>; error?: string }> {
+}): Promise<{
+  success: boolean;
+  repos: Array<{
+    name: string;
+    full_name: string;
+    description: string;
+    url: string;
+    private: boolean;
+  }>;
+  error?: string;
+}> {
   const { owner, type = "owner", sort = "updated", per_page = 30 } = args;
 
   let path: string;
@@ -129,13 +144,15 @@ export async function listRepos(args: {
     path = `/user/repos?type=${type}&sort=${sort}&per_page=${per_page}`;
   }
 
-  const res = await githubFetch<Array<{
-    name: string;
-    full_name: string;
-    description: string | null;
-    html_url: string;
-    private: boolean;
-  }>>(path);
+  const res = await githubFetch<
+    Array<{
+      name: string;
+      full_name: string;
+      description: string | null;
+      html_url: string;
+      private: boolean;
+    }>
+  >(path);
 
   if (!res.ok) {
     return { success: false, repos: [], error: res.error ?? "GitHub request failed" };
@@ -193,19 +210,32 @@ export async function listIssues(args: {
   repo: string;
   state?: string;
   per_page?: number;
-}): Promise<{ success: boolean; issues: Array<{ number: number; title: string; state: string; user: string; created_at: string; url: string }>; error?: string }> {
-  const { owner, repo, state = "open", per_page = 20 } = args;
-  const path = `/repos/${owner}/${repo}/issues?state=${state}&per_page=${per_page}`;
-
-  const res = await githubFetch<Array<{
+}): Promise<{
+  success: boolean;
+  issues: Array<{
     number: number;
     title: string;
     state: string;
-    user: { login: string };
+    user: string;
     created_at: string;
-    html_url: string;
-    pull_request?: unknown;
-  }>>(path);
+    url: string;
+  }>;
+  error?: string;
+}> {
+  const { owner, repo, state = "open", per_page = 20 } = args;
+  const path = `/repos/${owner}/${repo}/issues?state=${state}&per_page=${per_page}`;
+
+  const res = await githubFetch<
+    Array<{
+      number: number;
+      title: string;
+      state: string;
+      user: { login: string };
+      created_at: string;
+      html_url: string;
+      pull_request?: unknown;
+    }>
+  >(path);
 
   if (!res.ok) {
     return { success: false, issues: [], error: res.error ?? "GitHub request failed" };
@@ -232,19 +262,33 @@ export async function listPullRequests(args: {
   repo: string;
   state?: string;
   per_page?: number;
-}): Promise<{ success: boolean; prs: Array<{ number: number; title: string; state: string; user: string; head: string; base: string; url: string }>; error?: string }> {
-  const { owner, repo, state = "open", per_page = 20 } = args;
-  const path = `/repos/${owner}/${repo}/pulls?state=${state}&per_page=${per_page}`;
-
-  const res = await githubFetch<Array<{
+}): Promise<{
+  success: boolean;
+  prs: Array<{
     number: number;
     title: string;
     state: string;
-    user: { login: string };
-    head: { ref: string };
-    base: { ref: string };
-    html_url: string;
-  }>>(path);
+    user: string;
+    head: string;
+    base: string;
+    url: string;
+  }>;
+  error?: string;
+}> {
+  const { owner, repo, state = "open", per_page = 20 } = args;
+  const path = `/repos/${owner}/${repo}/pulls?state=${state}&per_page=${per_page}`;
+
+  const res = await githubFetch<
+    Array<{
+      number: number;
+      title: string;
+      state: string;
+      user: { login: string };
+      head: { ref: string };
+      base: { ref: string };
+      html_url: string;
+    }>
+  >(path);
 
   if (!res.ok) {
     return { success: false, prs: [], error: res.error ?? "GitHub request failed" };
@@ -268,7 +312,19 @@ export async function listWorkflowRuns(args: {
   owner: string;
   repo: string;
   per_page?: number;
-}): Promise<{ success: boolean; runs: Array<{ id: number; name: string; status: string; conclusion: string; head_branch: string; created_at: string; url: string }>; error?: string }> {
+}): Promise<{
+  success: boolean;
+  runs: Array<{
+    id: number;
+    name: string;
+    status: string;
+    conclusion: string;
+    head_branch: string;
+    created_at: string;
+    url: string;
+  }>;
+  error?: string;
+}> {
   const { owner, repo, per_page = 10 } = args;
   const path = `/repos/${owner}/${repo}/actions/runs?per_page=${per_page}`;
 
@@ -334,7 +390,10 @@ export async function getWorkflowRunLogs(args: {
       logs: `Logs available at: ${res.url}\nNote: Full log download requires streaming the zip response.`,
     };
   } catch (err) {
-    return { success: false, error: `Failed to fetch logs: ${err instanceof Error ? err.message : err}` };
+    return {
+      success: false,
+      error: `Failed to fetch logs: ${err instanceof Error ? err.message : err}`,
+    };
   }
 }
 
@@ -349,7 +408,7 @@ export async function createBranch(args: {
 
   // First get the SHA of the source branch
   const refRes = await githubFetch<{ object: { sha: string } }>(
-    `/repos/${owner}/${repo}/git/ref/heads/${from}`
+    `/repos/${owner}/${repo}/git/ref/heads/${from}`,
   );
 
   if (!refRes.ok) {
@@ -359,13 +418,10 @@ export async function createBranch(args: {
   const sha = refRes.data!.object.sha;
 
   // Create the new ref
-  const createRes = await githubFetch<{ ref: string }>(
-    `/repos/${owner}/${repo}/git/refs`,
-    {
-      method: "POST",
-      body: { ref: `refs/heads/${branch}`, sha },
-    }
-  );
+  const createRes = await githubFetch<{ ref: string }>(`/repos/${owner}/${repo}/git/refs`, {
+    method: "POST",
+    body: { ref: `refs/heads/${branch}`, sha },
+  });
 
   if (!createRes.ok) {
     return { success: false, error: createRes.error ?? "GitHub request failed" };
@@ -383,14 +439,18 @@ export async function createOrUpdateFile(args: {
   content: string;
   branch?: string;
   sha?: string;
-}): Promise<{ success: boolean; commit?: { sha: string; message: string; url: string }; error?: string }> {
+}): Promise<{
+  success: boolean;
+  commit?: { sha: string; message: string; url: string };
+  error?: string;
+}> {
   const { owner, repo, path, message, content, branch = "main", sha } = args;
 
   // If no SHA provided, try to get the current one (for updates)
   let fileSha = sha;
   if (!fileSha) {
     const existing = await githubFetch<{ sha: string }>(
-      `/repos/${owner}/${repo}/contents/${path}?ref=${branch}`
+      `/repos/${owner}/${repo}/contents/${path}?ref=${branch}`,
     );
     if (existing.ok && existing.data) {
       fileSha = existing.data.sha;
@@ -434,7 +494,11 @@ export async function createIssue(args: {
   title: string;
   body?: string;
   labels?: string[];
-}): Promise<{ success: boolean; issue?: { number: number; title: string; url: string }; error?: string }> {
+}): Promise<{
+  success: boolean;
+  issue?: { number: number; title: string; url: string };
+  error?: string;
+}> {
   const { owner, repo, title, body, labels } = args;
 
   const issueBody: Record<string, unknown> = { title };
@@ -472,7 +536,11 @@ export async function createPullRequest(args: {
   body?: string;
   head: string;
   base?: string;
-}): Promise<{ success: boolean; pr?: { number: number; title: string; url: string }; error?: string }> {
+}): Promise<{
+  success: boolean;
+  pr?: { number: number; title: string; url: string };
+  error?: string;
+}> {
   const { owner, repo, title, body, head, base = "main" } = args;
 
   const prBody: Record<string, unknown> = { title, head, base };
@@ -550,7 +618,7 @@ export async function getDiff(args: {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github+json",
         },
-      }
+      },
     );
 
     if (!res.ok) {
@@ -558,13 +626,18 @@ export async function getDiff(args: {
       return { success: false, error: `GitHub ${res.status}: ${text.slice(0, 500)}` };
     }
 
-    const data = (await res.json()) as { files?: Array<{ patch?: string; filename: string; status: string }> };
+    const data = (await res.json()) as {
+      files?: Array<{ patch?: string; filename: string; status: string }>;
+    };
     const diff = (data.files ?? [])
       .map((f) => `--- ${f.filename} (${f.status})\n${f.patch ?? "(no patch available)"}`)
       .join("\n\n");
 
     return { success: true, diff: diff || "No changes in comparison." };
   } catch (err) {
-    return { success: false, error: `Failed to get diff: ${err instanceof Error ? err.message : err}` };
+    return {
+      success: false,
+      error: `Failed to get diff: ${err instanceof Error ? err.message : err}`,
+    };
   }
 }
