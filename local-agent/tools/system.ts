@@ -1,22 +1,38 @@
 /**
  * System tools — read and modify macOS system settings.
- * All setters verify the change took effect before reporting success.
+ *
+ * Every external command runs via execFileSync with an argv array and no
+ * shell, so nothing here can be turned into shell syntax. The pipelines that
+ * used to be delegated to `sh` (`| grep`, `| awk`, `| head`) are parsed in
+ * TypeScript instead. All setters verify the change took effect before
+ * reporting success.
  */
 
-import { execSync } from "child_process";
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
+
+const RUN_OPTS: ExecFileSyncOptionsWithStringEncoding = {
+  timeout: 5000,
+  encoding: "utf-8",
+  stdio: ["pipe", "pipe", "pipe"],
+};
+
+function run(file: string, args: string[]): string {
+  return execFileSync(file, args, RUN_OPTS).trim();
+}
 
 /** Get current system volume (0-100) */
 export function getVolume(): { success: boolean; volume: number; error?: string } {
   try {
-    const output = execSync(
-      `osascript -e 'output volume of (get volume settings)'`,
-      { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    ).trim();
+    const output = run("osascript", ["-e", "output volume of (get volume settings)"]);
     const volume = parseInt(output, 10);
     if (isNaN(volume)) throw new Error(`Invalid volume output: ${output}`);
     return { success: true, volume };
   } catch (err) {
-    return { success: false, volume: 0, error: `Cannot get volume: ${err instanceof Error ? err.message : err}` };
+    return {
+      success: false,
+      volume: 0,
+      error: `Cannot get volume: ${err instanceof Error ? err.message : err}`,
+    };
   }
 }
 
@@ -28,10 +44,21 @@ export function setVolume(args: { level: number }): {
 } {
   const targetVolume = Math.max(0, Math.min(100, Math.round(args.level)));
   try {
-    execSync(`osascript -e 'set volume output volume ${targetVolume}'`, {
-      timeout: 5000,
-      stdio: "pipe",
-    });
+    // The number is passed as argv and coerced inside AppleScript — never
+    // interpolated into the script source.
+    execFileSync(
+      "osascript",
+      [
+        "-e",
+        "on run argv",
+        "-e",
+        "set volume output volume ((item 1 of argv) as integer)",
+        "-e",
+        "end run",
+        String(targetVolume),
+      ],
+      { timeout: 5000, stdio: "pipe" },
+    );
 
     // Verify the change took effect
     const verify = getVolume();
@@ -44,7 +71,11 @@ export function setVolume(args: { level: number }): {
       error: `Volume was set to ${targetVolume} but verification read ${verify.volume}`,
     };
   } catch (err) {
-    return { success: false, volume: 0, error: `Cannot set volume: ${err instanceof Error ? err.message : err}` };
+    return {
+      success: false,
+      volume: 0,
+      error: `Cannot set volume: ${err instanceof Error ? err.message : err}`,
+    };
   }
 }
 
@@ -52,11 +83,11 @@ export function setVolume(args: { level: number }): {
 export function getBrightness(): { success: boolean; brightness: number; error?: string } {
   try {
     // Use brightness command-line tool (ships with macOS)
-    const output = execSync(
-      `brightness -l 2>&1 | grep "display 0" | awk '{print $2}'`,
-      { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    ).trim();
-    const raw = parseFloat(output);
+    const output = run("brightness", ["-l"]);
+    // Line format: "display 0: main display, brightness 0.500000"
+    const match = output.match(/display\s+0:.*?brightness\s+([\d.]+)/i);
+    if (!match) throw new Error(`Cannot parse brightness: ${output}`);
+    const raw = parseFloat(match[1] ?? "");
     if (isNaN(raw)) throw new Error(`Cannot parse brightness: ${output}`);
     // brightness command returns 0.0-1.0, convert to 0-100
     const brightness = Math.round(raw * 100);
@@ -64,18 +95,17 @@ export function getBrightness(): { success: boolean; brightness: number; error?:
   } catch {
     // brightness tool may not be installed — try pmset fallback
     try {
-      const output = execSync(
-        `pmset -g gtemp | grep -i 'display' | awk '{print $2}' | tr -d '%'`,
-        { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-      ).trim();
-      const brightness = parseInt(output, 10);
-      if (isNaN(brightness)) throw new Error("Cannot parse brightness from pmset");
-      return { success: true, brightness };
-    } catch (err) {
+      const output = run("pmset", ["-g", "gtemp"]);
+      const displayLine = output.split("\n").find((line) => /display/i.test(line)) ?? "";
+      const match = displayLine.match(/(\d+)%/);
+      if (!match) throw new Error("Cannot parse brightness from pmset");
+      return { success: true, brightness: parseInt(match[1] ?? "0", 10) };
+    } catch {
       return {
         success: false,
         brightness: 0,
-        error: "Cannot get brightness — 'brightness' tool may not be installed. Install with: brew install brightness",
+        error:
+          "Cannot get brightness — 'brightness' tool may not be installed. Install with: brew install brightness",
       };
     }
   }
@@ -89,15 +119,14 @@ export function getBattery(): {
   error?: string;
 } {
   try {
-    // Use pmset for reliable battery info on macOS
-    const output = execSync(
-      `pmset -g batt | head -2 | tail -1`,
-      { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    ).trim();
+    // Use pmset for reliable battery info
+    const output = run("pmset", ["-g", "batt"]);
+    // Second line format: "Battery\t85%; charging; 1:23 remaining"
+    const line = output.split("\n")[1] ?? "";
+    if (!line) throw new Error("Cannot parse battery output: empty");
 
-    // Format: "Battery	85%; charging; 1:23 remaining"
-    const match = output.match(/(\d+)%;?\s*(charging|discharging|charged|finishing charge full)?/i);
-    if (!match) throw new Error(`Cannot parse battery output: ${output}`);
+    const match = line.match(/(\d+)%;?\s*(charging|discharging|charged|finishing charge full)?/i);
+    if (!match) throw new Error(`Cannot parse battery output: ${line}`);
 
     const percentage = parseInt(match[1] ?? "0", 10);
     const charging = (match[2] ?? "").toLowerCase().includes("charg");
@@ -122,39 +151,31 @@ export function getRAM(): {
   error?: string;
 } {
   try {
-    const output = execSync(
-      `sysctl hw.memsize | awk '{print $2}'`,
-      { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    ).trim();
-    const totalBytes = parseInt(output, 10);
+    const output = run("sysctl", ["hw.memsize"]);
+    const totalMatch = output.match(/hw\.memsize:\s*(\d+)/);
+    if (!totalMatch) throw new Error(`Cannot parse RAM: ${output}`);
+    const totalBytes = parseInt(totalMatch[1] ?? "0", 10);
     if (isNaN(totalBytes)) throw new Error(`Cannot parse RAM: ${output}`);
-
-    // Get memory pressure info
-    const memInfo = execSync(
-      `memory_pressure 2>/dev/null | head -5 || vm_stat | head -5`,
-      { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    );
 
     const totalGB = Math.round((totalBytes / (1024 * 1024 * 1024)) * 10) / 10;
 
     // Estimate used from page size and pages
     let usedGB = 0;
     try {
-      const vmStat = execSync(`vm_stat | head -10`, {
-        timeout: 3000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
-      });
+      const vmStat = run("vm_stat", []);
       const pageSizeMatch = vmStat.match(/page size of (\d+)/);
-      const pageSize = pageSizeMatch ? parseInt(pageSizeMatch[1], 10) : 16384;
+      const pageSize = pageSizeMatch ? parseInt(pageSizeMatch[1] ?? "16384", 10) : 16384;
 
       const activeMatch = vmStat.match(/Pages active:\s+(\d+)/);
       const wiredMatch = vmStat.match(/Pages wired down:\s+(\d+)/);
       const compressedMatch = vmStat.match(/Pages occupied by compressor:\s+(\d+)/);
 
-      const active = activeMatch ? parseInt(activeMatch[1], 10) : 0;
-      const wired = wiredMatch ? parseInt(wiredMatch[1], 10) : 0;
-      const compressed = compressedMatch ? parseInt(compressedMatch[1], 10) : 0;
+      const active = activeMatch ? parseInt(activeMatch[1] ?? "0", 10) : 0;
+      const wired = wiredMatch ? parseInt(wiredMatch[1] ?? "0", 10) : 0;
+      const compressed = compressedMatch ? parseInt(compressedMatch[1] ?? "0", 10) : 0;
 
-      usedGB = Math.round(((active + wired + compressed) * pageSize) / (1024 * 1024 * 1024) * 10) / 10;
+      usedGB =
+        Math.round((((active + wired + compressed) * pageSize) / (1024 * 1024 * 1024)) * 10) / 10;
     } catch {
       usedGB = Math.round(totalGB * 0.4 * 10) / 10; // rough estimate
     }
@@ -163,7 +184,13 @@ export function getRAM(): {
 
     return { success: true, totalGB, usedGB, availableGB };
   } catch (err) {
-    return { success: false, totalGB: 0, usedGB: 0, availableGB: 0, error: `Cannot get RAM info: ${err instanceof Error ? err.message : err}` };
+    return {
+      success: false,
+      totalGB: 0,
+      usedGB: 0,
+      availableGB: 0,
+      error: `Cannot get RAM info: ${err instanceof Error ? err.message : err}`,
+    };
   }
 }
 
@@ -176,18 +203,27 @@ export function getStorage(): {
   error?: string;
 } {
   try {
-    const output = execSync(
-      `df -g / | tail -1 | awk '{print $2, $3, $4}'`,
-      { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    ).trim();
-    const [totalGB, usedGB, availableGB] = output.split(/\s+/).map((s) => parseInt(s, 10));
+    const output = run("df", ["-g", "/"]);
+    const lines = output.split("\n").filter((line) => line.trim().length > 0);
+    const last = lines[lines.length - 1] ?? "";
+    // Columns: Filesystem 1G-blocks Used Available Capacity ...
+    const fields = last.split(/\s+/);
+    const totalGB = parseInt(fields[1] ?? "", 10);
+    const usedGB = parseInt(fields[2] ?? "", 10);
+    const availableGB = parseInt(fields[3] ?? "", 10);
 
     if (isNaN(totalGB) || isNaN(usedGB) || isNaN(availableGB)) {
-      throw new Error(`Cannot parse storage output: ${output}`);
+      throw new Error(`Cannot parse storage output: ${last}`);
     }
 
     return { success: true, totalGB, usedGB, availableGB };
   } catch (err) {
-    return { success: false, totalGB: 0, usedGB: 0, availableGB: 0, error: `Cannot get storage info: ${err instanceof Error ? err.message : err}` };
+    return {
+      success: false,
+      totalGB: 0,
+      usedGB: 0,
+      availableGB: 0,
+      error: `Cannot get storage info: ${err instanceof Error ? err.message : err}`,
+    };
   }
 }

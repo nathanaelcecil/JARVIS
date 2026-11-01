@@ -138,7 +138,7 @@ export async function listRepos(args: {
   }>>(path);
 
   if (!res.ok) {
-    return { success: false, repos: [], error: res.error };
+    return { success: false, repos: [], error: res.error ?? "GitHub request failed" };
   }
 
   const repos = (res.data ?? []).map((r) => ({
@@ -171,7 +171,7 @@ export async function getFile(args: {
   }>(path, { accept: "application/vnd.github+json" });
 
   if (!res.ok) {
-    return { success: false, error: res.error };
+    return { success: false, error: res.error ?? "GitHub request failed" };
   }
 
   const data = res.data!;
@@ -208,7 +208,7 @@ export async function listIssues(args: {
   }>>(path);
 
   if (!res.ok) {
-    return { success: false, issues: [], error: res.error };
+    return { success: false, issues: [], error: res.error ?? "GitHub request failed" };
   }
 
   // Filter out pull requests (they appear in issues endpoint)
@@ -247,7 +247,7 @@ export async function listPullRequests(args: {
   }>>(path);
 
   if (!res.ok) {
-    return { success: false, prs: [], error: res.error };
+    return { success: false, prs: [], error: res.error ?? "GitHub request failed" };
   }
 
   const prs = (res.data ?? []).map((pr) => ({
@@ -285,7 +285,7 @@ export async function listWorkflowRuns(args: {
   }>(path);
 
   if (!res.ok) {
-    return { success: false, runs: [], error: res.error };
+    return { success: false, runs: [], error: res.error ?? "GitHub request failed" };
   }
 
   const runs = (res.data?.workflow_runs ?? []).map((r) => ({
@@ -353,7 +353,7 @@ export async function createBranch(args: {
   );
 
   if (!refRes.ok) {
-    return { success: false, error: refRes.error };
+    return { success: false, error: refRes.error ?? "GitHub request failed" };
   }
 
   const sha = refRes.data!.object.sha;
@@ -368,7 +368,7 @@ export async function createBranch(args: {
   );
 
   if (!createRes.ok) {
-    return { success: false, error: createRes.error };
+    return { success: false, error: createRes.error ?? "GitHub request failed" };
   }
 
   return { success: true, ref: createRes.data!.ref };
@@ -403,7 +403,7 @@ export async function createOrUpdateFile(args: {
     branch,
   };
   if (fileSha) {
-    body.sha = fileSha;
+    body["sha"] = fileSha;
   }
 
   const res = await githubFetch<{
@@ -414,7 +414,7 @@ export async function createOrUpdateFile(args: {
   });
 
   if (!res.ok) {
-    return { success: false, error: res.error };
+    return { success: false, error: res.error ?? "GitHub request failed" };
   }
 
   return {
@@ -438,8 +438,8 @@ export async function createIssue(args: {
   const { owner, repo, title, body, labels } = args;
 
   const issueBody: Record<string, unknown> = { title };
-  if (body) issueBody.body = body;
-  if (labels && labels.length > 0) issueBody.labels = labels;
+  if (body) issueBody["body"] = body;
+  if (labels && labels.length > 0) issueBody["labels"] = labels;
 
   const res = await githubFetch<{
     number: number;
@@ -451,7 +451,7 @@ export async function createIssue(args: {
   });
 
   if (!res.ok) {
-    return { success: false, error: res.error };
+    return { success: false, error: res.error ?? "GitHub request failed" };
   }
 
   return {
@@ -476,7 +476,7 @@ export async function createPullRequest(args: {
   const { owner, repo, title, body, head, base = "main" } = args;
 
   const prBody: Record<string, unknown> = { title, head, base };
-  if (body) prBody.body = body;
+  if (body) prBody["body"] = body;
 
   const res = await githubFetch<{
     number: number;
@@ -488,7 +488,7 @@ export async function createPullRequest(args: {
   });
 
   if (!res.ok) {
-    return { success: false, error: res.error };
+    return { success: false, error: res.error ?? "GitHub request failed" };
   }
 
   return {
@@ -519,7 +519,7 @@ export async function createComment(args: {
   });
 
   if (!res.ok) {
-    return { success: false, error: res.error };
+    return { success: false, error: res.error ?? "GitHub request failed" };
   }
 
   return {

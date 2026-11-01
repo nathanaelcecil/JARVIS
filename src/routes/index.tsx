@@ -27,7 +27,10 @@ export const Route = createFileRoute("/")({
 });
 
 /** Parse SSE lines from a text buffer, return [events, remaining buffer] */
-function parseSSE(buffer: string): { events: Array<{ event: string; data: string }>; rest: string } {
+function parseSSE(buffer: string): {
+  events: Array<{ event: string; data: string }>;
+  rest: string;
+} {
   const events: Array<{ event: string; data: string }> = [];
   const lines = buffer.split("\n");
   let rest: string = "";
@@ -100,8 +103,16 @@ function Index() {
     question: string;
   } | null>(null);
   const [killActive, setKillActive] = useState(false);
-  const [pendingConfirm, setPendingConfirm] = useState<{ confirmId: string; tool: string; args: Record<string, unknown> } | null>(null);
-  const [viewWidth, setViewWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    confirmId: string;
+    tool: string;
+    args: Record<string, unknown>;
+  } | null>(null);
+  // Ephemeral tool/ack status — deliberately OUTSIDE the spoken message body
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
+  const [viewWidth, setViewWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1200,
+  );
   const [currentRoute, setCurrentRoute] = useState<string>("");
   const [currentTaskId, setCurrentTaskId] = useState<string>("");
   const messageListRef = useRef<MessageListHandle>(null);
@@ -134,11 +145,17 @@ function Index() {
         localStorage.setItem("jarvis-session-id", sid);
       }
       return sid;
-    })()
+    })(),
   );
 
   // Mirror processing state for the proactive poll (avoids re-creating it)
   const processingRef = useRef(false);
+
+  // Routines arrive as prompts to RUN, not as things JARVIS said. They are
+  // queued here and submitted one at a time as a normal user turn; a ref keeps
+  // the poll independent of handleSend's declaration order.
+  const routineQueueRef = useRef<Array<{ id: string; label: string; prompt: string }>>([]);
+  const sendRef = useRef<((text: string) => void) | null>(null);
   useEffect(() => {
     processingRef.current = isProcessing;
   }, [isProcessing]);
@@ -159,24 +176,47 @@ function Index() {
             kind: string;
             created_at: string;
           }>;
+          routines?: Array<{ id: string; label: string; prompt: string; at: number }>;
         };
         for (const m of data.messages ?? []) {
           if (disposed) return;
+          const msgId = `proactive-${m.id}`;
           setMessages((prev) => [
             ...prev,
             {
-              id: `proactive-${m.id}`,
+              id: msgId,
               role: "assistant",
-              content: m.content,
+              content: "",
               timestamp: m.created_at,
             },
           ]);
-          // Voice delivery — aborts if the user starts a new message
+          // Voice delivery with audio-synced reveal — the message starts
+          // empty and its text appears exactly as it is spoken (full text
+          // appears immediately if there is no audio possible).
           playResponseChunked(
             m.content,
             (speaking) => setState(speaking ? "speaking" : "idle"),
-            () => audioAbortRef.current || disposed
+            () => audioAbortRef.current || disposed,
+            (revealed) =>
+              setMessages((prev) =>
+                prev.map((x) => (x.id === msgId ? { ...x, content: revealed } : x)),
+              ),
           ).catch(() => {});
+        }
+        // A routine fired: run its prompt as the user's own request, one at a
+        // time, and never while a turn is already streaming.
+        for (const routine of data.routines ?? []) {
+          if (routineQueueRef.current.some((entry) => entry.id === routine.id)) continue;
+          if (routineQueueRef.current.length >= 10) break;
+          routineQueueRef.current.push({
+            id: routine.id,
+            label: routine.label,
+            prompt: routine.prompt,
+          });
+        }
+        if (!processingRef.current && sendRef.current) {
+          const next = routineQueueRef.current.shift();
+          if (next) sendRef.current(next.prompt);
         }
       } catch {
         // Dev server not ready yet — retry next tick
@@ -201,50 +241,67 @@ function Index() {
     }
     if (!returning) return;
     const t = setTimeout(() => {
-      const greeting =
-        "Welcome back, sir. All systems online — what are we working on today?";
+      const greeting = "Welcome back, sir. All systems online — what are we working on today?";
+      const greetId = `proactive-greeting-${Date.now()}`;
       setMessages((prev) => [
         ...prev,
         {
-          id: `proactive-greeting-${Date.now()}`,
+          id: greetId,
           role: "assistant",
-          content: greeting,
+          content: "",
           timestamp: new Date().toISOString(),
         },
       ]);
       playResponseChunked(
         greeting,
         (speaking) => setState(speaking ? "speaking" : "idle"),
-        () => audioAbortRef.current
+        () => audioAbortRef.current,
+        (revealed) =>
+          setMessages((prev) =>
+            prev.map((x) => (x.id === greetId ? { ...x, content: revealed } : x)),
+          ),
       ).catch(() => {});
     }, 800);
     return () => clearTimeout(t);
   }, []);
 
   // Handle confirmation dialog
-  const handleConfirm = useCallback(async (approved: boolean) => {
-    if (!pendingConfirm) return;
-    try {
-      const res = await fetch("/api/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmId: pendingConfirm.confirmId, approved }),
-      });
-      if (!res.ok) {
-        // The server already resolved/expired this prompt — the click was late.
-        console.warn("[Confirm] Decision not accepted (expired):", res.status);
+  const handleConfirm = useCallback(
+    async (approved: boolean) => {
+      if (!pendingConfirm) return;
+      try {
+        const res = await fetch("/api/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmId: pendingConfirm.confirmId, approved }),
+        });
+        if (!res.ok) {
+          // The server already resolved/expired this prompt — the click was late.
+          console.warn("[Confirm] Decision not accepted (expired):", res.status);
+        }
+      } catch (err) {
+        console.error("[Confirm] Failed to send decision:", err);
       }
-    } catch (err) {
-      console.error("[Confirm] Failed to send decision:", err);
-    }
-    setPendingConfirm(null);
-  }, [pendingConfirm]);
+      setPendingConfirm(null);
+    },
+    [pendingConfirm],
+  );
 
   // Track viewport width for orb offset
   useEffect(() => {
     const onResize = () => setViewWidth(window.innerWidth);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Unmount cleanup: kill any playing audio (stops sources + reveals any
+  // half-spoken transcript) and abort the in-flight stream.
+  useEffect(() => {
+    return () => {
+      stopAudio();
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+    };
   }, []);
 
   // Clock tick
@@ -324,9 +381,10 @@ function Index() {
           const statusMsg: ChatMessage = {
             id: `system-${Date.now()}`,
             role: "assistant",
-            content: status.count > 0
-              ? `Current tasks:\n${status.tasks.map((t) => `• ${t.status}: "${t.message}" (${t.route} route, ${Math.round(t.elapsedMs / 1000)}s)`).join("\n")}`
-              : "No active tasks at the moment, sir.",
+            content:
+              status.count > 0
+                ? `Current tasks:\n${status.tasks.map((t) => `• ${t.status}: "${t.message}" (${t.route} route, ${Math.round(t.elapsedMs / 1000)}s)`).join("\n")}`
+                : "No active tasks at the moment, sir.",
             timestamp: new Date().toISOString(),
           };
           setMessages((prev) => [...prev, statusMsg]);
@@ -376,9 +434,7 @@ function Index() {
         } else {
           const kb = Math.round(a.totalChars / 102.4) / 10;
           messageText += `\n\n--- Attached file: ${a.name} (${kb} KB${
-            a.truncated
-              ? `, TRUNCATED to first ~12k of ${a.totalChars} chars`
-              : ""
+            a.truncated ? `, TRUNCATED to first ~12k of ${a.totalChars} chars` : ""
           }) ---\n\`\`\`\n${a.content}\n\`\`\``;
         }
       }
@@ -440,7 +496,7 @@ function Index() {
           firstAudioLogged = true;
           console.log(
             `%c[Perf] REQUEST→FIRST AUDIBLE AUDIO: ${ms}ms`,
-            "color:#22c55e;font-weight:bold"
+            "color:#22c55e;font-weight:bold",
           );
         } else {
           console.log(`[Perf] ${stage}: ${ms}ms`);
@@ -455,6 +511,14 @@ function Index() {
         () => audioAbortRef.current,
         markPerf,
       );
+      // The message body is reveal-driven: text appears word-by-word in
+      // lockstep with the audio clock, never ahead of the voice.
+      streamingTTS.setRevealHandler((revealed) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, content: revealed } : m)),
+        );
+      });
+      setStreamStatus(null);
       let streamedRoute = "";
 
       try {
@@ -498,14 +562,9 @@ function Index() {
 
               switch (event) {
                 case "ack":
-                  // FAST ack — show immediately in the streaming message
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId
-                        ? { ...m, content: parsed.text || "One moment, sir." }
-                        : m
-                    )
-                  );
+                  // FAST ack — status line only; the spoken message body is
+                  // owned by the reveal handler.
+                  setStreamStatus(parsed.text || "One moment, sir.");
                   break;
 
                 case "perf":
@@ -522,28 +581,18 @@ function Index() {
                   break;
 
                 case "token":
-                  // Append token to the streaming message + feed to streaming TTS
+                  // Accumulate the transcript + feed streaming TTS. Display
+                  // is NOT updated here — the reveal handler owns it.
                   fullText += parsed.text;
                   streamingTTS.pushToken(parsed.text);
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId ? { ...m, content: fullText } : m
-                    )
-                  );
                   break;
 
                 case "tool_start":
-                  // Show tool execution status in the streaming message
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId
-                        ? { ...m, content: fullText + `\n\n⚙ Executing ${parsed.tool}...` }
-                        : m
-                    )
-                  );
+                  // Tool execution status — separate line, never the message
+                  setStreamStatus(`⚙ Executing ${parsed.tool}...`);
                   break;
 
-                                case "confirm_request":
+                case "confirm_request":
                   // Show confirmation prompt
                   setPendingConfirm({
                     confirmId: parsed.confirmId || "",
@@ -553,18 +602,13 @@ function Index() {
                   break;
 
                 case "tool_result":
-                  // Show tool result in the streaming message
-                  const toolResultStr = parsed.result?.error
-                    ? `\n⚠ ${parsed.tool}: ${parsed.result.error}`
-                    : parsed.result?.success === false
-                      ? `\n⚠ ${parsed.tool}: ${parsed.result.error || "Failed"}`
-                      : `\n✓ ${parsed.tool} completed`;
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsgId
-                        ? { ...m, content: fullText + toolResultStr }
-                        : m
-                    )
+                  // Tool result status — separate line, never the message
+                  setStreamStatus(
+                    parsed.result?.error
+                      ? `⚠ ${parsed.tool}: ${parsed.result.error}`
+                      : parsed.result?.success === false
+                        ? `⚠ ${parsed.tool}: ${parsed.result.error || "Failed"}`
+                        : `✓ ${parsed.tool} completed`,
                   );
                   break;
 
@@ -576,21 +620,16 @@ function Index() {
                   // server has already resolved or expired — close it so a
                   // late click can't be mistaken for a denial.
                   setPendingConfirm(null);
+                  setStreamStatus(null);
 
-                  // Final-flush audit: adopt the server's full text if any
-                  // tokens were missed client-side (dropped chunk / reconnect)
-                  if (
-                    typeof parsed.text === "string" &&
-                    parsed.text.length > fullText.length
-                  ) {
+                  // Final-flush audit: if tokens were missed client-side
+                  // (dropped chunk / reconnect), feed the missing suffix to
+                  // TTS so it is both spoken and revealed — never display
+                  // text the reveal clock hasn't caught up to.
+                  if (typeof parsed.text === "string" && parsed.text.length > fullText.length) {
+                    const delta = parsed.text.slice(fullText.length);
                     fullText = parsed.text;
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMsgId
-                          ? { ...m, content: fullText }
-                          : m
-                      )
-                    );
+                    streamingTTS.pushToken(delta);
                   }
 
                   // Finalize streaming TTS (flush remaining text)
@@ -615,21 +654,22 @@ function Index() {
                                 : "Task cancelled.",
                               role: "system" as const,
                             }
-                          : m
-                      )
+                          : m,
+                      ),
                     );
                   }
                   break;
 
                 case "error":
                   ttsFinalized = true; // don't flush partial text after an error
+                  setStreamStatus(null);
                   streamingTTS.cancel();
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantMsgId
                         ? { ...m, content: `Error: ${parsed.error}`, role: "system" as const }
-                        : m
-                    )
+                        : m,
+                    ),
                   );
                   break;
               }
@@ -657,8 +697,13 @@ function Index() {
         if ((err as Error).name === "AbortError") {
           // Stream was cancelled — already handled
           ttsFinalized = true;
+          streamingTTS.cancel();
           console.log("[Stream] Fetch aborted (user cancelled or new message)");
         } else {
+          // Stop the reveal loop first so a live rAF tick can't overwrite
+          // the error message below with partial transcript text.
+          ttsFinalized = true;
+          streamingTTS.cancel();
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
@@ -667,18 +712,26 @@ function Index() {
                     content: `Error: ${err instanceof Error ? err.message : "Unknown error"}`,
                     role: "system" as const,
                   }
-                : m
-            )
+                : m,
+            ),
           );
         }
       } finally {
         setIsProcessing(false);
         setState("idle");
+        setStreamStatus(null);
         streamAbortRef.current = null;
       }
     },
-    [capturedImage, currentTaskId]
+    [capturedImage, currentTaskId],
   );
+
+  // Let the proactive poll submit a queued routine as a real user turn.
+  useEffect(() => {
+    sendRef.current = (text: string) => {
+      void handleSend(text);
+    };
+  }, [handleSend]);
 
   // ⏹ Cut the running reply (server persists the partial for continuation)
   const handleStop = useCallback(() => {
@@ -698,7 +751,7 @@ function Index() {
         new Date(Date.parse(msg.timestamp) - 5_000).toISOString();
       void handleSend(newText, [], { msgId, truncateAfter });
     },
-    [handleSend]
+    [handleSend],
   );
 
   const handleAdoptPattern = useCallback(async () => {
@@ -745,9 +798,7 @@ function Index() {
 
       {/* Header */}
       <header className="pointer-events-none absolute left-8 top-8 space-y-1 md:left-11 md:top-11">
-        <h1 className="hud-title text-[13px] tracking-[0.62em] text-hud-bright">
-          J A R V I S
-        </h1>
+        <h1 className="hud-title text-[13px] tracking-[0.62em] text-hud-bright">J A R V I S</h1>
         <p className="hud-mono text-[9px] tracking-[0.34em] text-hud-dim">
           INTELLIGENCE CORE / REV 9.4
         </p>
@@ -787,10 +838,7 @@ function Index() {
           ["FILAMENT NET", "NOMINAL"],
           ["MEM SHARDS", "1.42E6"],
         ].map(([k, v]) => (
-          <p
-            key={k}
-            className="hud-mono text-[9px] tracking-[0.26em] text-hud-dim"
-          >
+          <p key={k} className="hud-mono text-[9px] tracking-[0.26em] text-hud-dim">
             <span className="inline-block w-[132px]">{k}</span>
             <span className="text-hud">{v}</span>
           </p>
@@ -799,6 +847,15 @@ function Index() {
 
       {/* Chat panel — bottom right */}
       <div className="absolute bottom-4 right-4 md:bottom-6 md:right-6 w-[min(500px,80vw)] max-h-[calc(100vh-4rem)] flex flex-col z-10">
+        {/* Tool/ack status — separate from the spoken message body */}
+        {streamStatus && (
+          <div className="flex justify-start mb-2">
+            <div className="px-3 py-1.5 border border-amber-500/10 bg-transparent backdrop-blur-sm">
+              <p className="hud-mono text-[10px] text-hud-dim tracking-wider">{streamStatus}</p>
+            </div>
+          </div>
+        )}
+
         {/* Messages — scrollable, takes remaining space */}
         {messages.length > 0 && (
           <div className="flex-1 min-h-0 mb-2 overflow-y-auto bg-transparent backdrop-blur-sm border border-amber-500/10 rounded-sm p-2">
@@ -830,17 +887,17 @@ function Index() {
 
         {/* Pattern proposal */}
         {pendingConfirm && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-          <ConfirmAction
-            tool={pendingConfirm.tool}
-            args={pendingConfirm.args}
-            onApprove={() => handleConfirm(true)}
-            onDeny={() => handleConfirm(false)}
-          />
-        </div>
-      )}
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+            <ConfirmAction
+              tool={pendingConfirm.tool}
+              args={pendingConfirm.args}
+              onApprove={() => handleConfirm(true)}
+              onDeny={() => handleConfirm(false)}
+            />
+          </div>
+        )}
 
-      {pendingPattern && (
+        {pendingPattern && (
           <div className="mb-2">
             <PatternProposal
               description={pendingPattern.description}

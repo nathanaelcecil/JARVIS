@@ -1,16 +1,20 @@
 /**
  * Terminal tool — run shell commands with:
  * - Per-task AbortSignal (SIGTERM → SIGKILL after grace period)
- * - Command classification: auto / confirm / never
+ * - Command classification: confirm / never (there is no "auto")
  * - Timeout enforcement
  * - stdout + stderr capture
+ *
+ * The classifier is a TRIPWIRE, not a security boundary. It hard-blocks a
+ * handful of destructive/credential patterns; everything else requires the
+ * user's approval. Never treat a classifyCommand() result as permission.
  */
 
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 
 // ── Command classification ──────────────────────────────────
 
-type Classification = "auto" | "confirm" | "never";
+type Classification = "confirm" | "never";
 
 /** Patterns that are NEVER allowed — destructive or credential-touching */
 const NEVER_PATTERNS: RegExp[] = [
@@ -36,89 +40,44 @@ const NEVER_PATTERNS: RegExp[] = [
   /\bcredentials?\b.*\bwrite\b/i,               // writing credentials
   /\bcurl\b.*\b(Bearer|token|password|secret)\b/i, // curling with secrets
   /\bwget\b.*\b(password|token|secret)\b/i,     // wget with secrets
+  // Local JARVIS secrets — reading or copying them is never allowed.
+  /\.agent-secret\b/, // local-agent bearer secret
+  /\.approval-key\b/, // local-agent approval key
+  /\bagent-token\b/, // VS Code extension token
+  /\bvoice_sample\.wav\b/, // personal voice sample
+  /\.ssh\b/, // SSH keys and config
 ];
 
-/** Patterns that are state-changing (need confirmation) */
-const CONFIRM_PATTERNS: RegExp[] = [
-  /\bnpm\s+(install|i|ci)\b/,                   // npm install
-  /\byarn\s+(add|install)\b/,                    // yarn add
-  /\bbun\s+(add|install)\b/,                     // bun add
-  /\bpip\s+install\b/,                          // pip install
-  /\bgit\s+commit\b/,                           // git commit
-  /\bgit\s+push\b/,                             // git push (non-force)
-  /\bgit\s+merge\b/,                            // git merge
-  /\bgit\s+rebase\b/,                           // git rebase
-  /\bgit\s+checkout\s+-b\b/,                    // git checkout -b
-  /\bgit\s+branch\s+(?!.*-d\b)/,                // git branch (create)
-  /\bgit\s+stash\s+drop\b/,                     // git stash drop
-  /\bnpx\s+(create|init)\b/,                    // npx create
-  /\b(cd|mkdir|touch|mv|cp)\b.*\//,             // file mutations
-  /\b>\s*\S/,                                   // redirects (create/overwrite files)
-  /\b>>\s*\S/,                                  // appends
-  /\bcat\s+.*>\s*\S/,                           // cat > file
-  /\btee\b/,                                    // tee
-  /\bstart\b|\bopen\b.*-a\b/,                  // launching processes
-  /\bbrew\s+install\b/,                         // brew install
-  /\bbrew\s+uninstall\b/,                       // brew uninstall
-  /\bport\s+install\b/,                         // port install
-  /\bdocker\s+(run|create|rm|stop|kill)\b/,     // docker mutations
-  /\bkubectl\s+(create|delete|apply|patch)\b/,  // k8s mutations
-  /\bterraform\s+(apply|destroy|import)\b/,     // terraform mutations
-];
-
-/** Patterns that are read-only (auto-approve) */
-const AUTO_PATTERNS: RegExp[] = [
-  /\bgit\s+(status|log|diff|show|branch\s*-l?|remote\s*-v|stash\s*list|blame)\b/,
-  /\bls\b/,
-  /\bcat\b(?!.*\s*>\s*\S)/,                    // cat without redirect
-  /\bpwd\b/,
-  /\bwhich\b/,
-  /\bwhere\b/,
-  /\bfile\b/,
-  /\bwc\b/,
-  /\bgrep\b(?!.*\s+>\s*\S)/,                    // grep without redirect
-  /\bfind\b(?!.*\s+>\s*\S)/,                    // find without redirect
-  /\bhead\b/,
-  /\btail\b/,
-  /\bdate\b/,
-  /\benv\b/,
-  /\becho\b(?!.*\s*>\s*\S)/,                    // echo without redirect
-  /\bnpm\s+(test|run\s+\w+|start|list)\b/,
-  /\bnpx\s+(eslint|prettier|tsc|vitest|jest)\b/,
-  /\bnode\s+-e\b/,
-  /\bbun\s+(test|run)\b/,
-  /\bcargo\s+(test|build|check|clippy)\b/,
-  /\brustc\b/,
-  /\bpython\b(?!.*-c\b.*import\s+os)/,
-  /\bgit\s+fetch\b/,
-];
-
+/**
+ * Classify a shell command.
+ *
+ * Only two outcomes exist. "auto" was removed: unanchored regexes matched
+ * substrings, so `ls; rm important.txt` and `echo hi | sh` were labelled
+ * read-only. A label like that invites a caller to skip approval, so every
+ * command that is not hard-blocked is now "confirm".
+ */
 function classifyCommand(command: string): { classification: Classification; reason: string } {
   const trimmed = command.trim();
 
-  // Check NEVER first — highest priority
+  if (!trimmed) {
+    return { classification: "confirm", reason: "Empty command — requires confirmation" };
+  }
+
+  // NEVER first — highest priority. Tripwire only: approval is the boundary.
   for (const pattern of NEVER_PATTERNS) {
     if (pattern.test(trimmed)) {
-      return { classification: "never", reason: `Command matches destructive/forbidden pattern: ${pattern.source}` };
+      return {
+        classification: "never",
+        reason: `Command matches a destructive/forbidden pattern: ${pattern.source}`,
+      };
     }
   }
 
-  // Check CONFIRM
-  for (const pattern of CONFIRM_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      return { classification: "confirm", reason: `Command is state-changing: ${pattern.source}` };
-    }
-  }
-
-  // Check AUTO
-  for (const pattern of AUTO_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      return { classification: "auto", reason: `Command is read-only` };
-    }
-  }
-
-  // Default: confirm (anything we can't classify needs human review)
-  return { classification: "confirm", reason: "Unknown command pattern — requiring confirmation" };
+  return {
+    classification: "confirm",
+    reason:
+      "Every shell command requires user confirmation; the regex classifier is a tripwire, not a safety guarantee",
+  };
 }
 
 // ── Execution ───────────────────────────────────────────────

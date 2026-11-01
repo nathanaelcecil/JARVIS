@@ -9,8 +9,7 @@ export interface ChatMessage {
 }
 
 export type ContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
+  { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
 export interface ResponseMetadata {
   correction?: { behavior: string };
@@ -24,6 +23,15 @@ export interface AIProvider {
     model: string;
     signal?: AbortSignal;
     temperature?: number;
+    /**
+     * Coding-agent mode: return the FULL reply including its ---METADATA---
+     * block. The agent engine parses that block itself; the chat UI keeps
+     * the stripped behavior for clean text reveal.
+     */
+    raw?: boolean;
+    /** Per-call override of the hard request timeout (agent turns can need
+     *  longer prefills on grown transcripts). Default 120s. */
+    timeoutMs?: number;
   }): Promise<{ content: string; metadata?: ResponseMetadata }>;
 
   chatStream?(params: {
@@ -46,11 +54,7 @@ export interface AIProvider {
 function ollamaKeepAlive(): string | number {
   const keepAliveRaw = process.env["OLLAMA_KEEP_ALIVE"] ?? "-1";
   const trimmed = keepAliveRaw.trim();
-  return trimmed === ""
-    ? "-1"
-    : /^-?\d+$/.test(trimmed)
-      ? Number(trimmed)
-      : trimmed;
+  return trimmed === "" ? "-1" : /^-?\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
 }
 
 /**
@@ -103,11 +107,13 @@ export class OllamaProvider implements AIProvider {
     model: string;
     signal?: AbortSignal;
     temperature?: number;
+    raw?: boolean;
+    timeoutMs?: number;
   }): Promise<{ content: string; metadata?: ResponseMetadata }> {
-    const { messages, model, signal, temperature } = params;
+    const { messages, model, signal, temperature, raw: keepRaw, timeoutMs } = params;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs ?? 120000);
     if (signal) {
       if (signal.aborted) controller.abort();
       signal.addEventListener("abort", () => controller.abort(), { once: true });
@@ -135,7 +141,7 @@ export class OllamaProvider implements AIProvider {
     } catch (fetchErr) {
       clearTimeout(timeoutId);
       throw new Error(
-        `Ollama unreachable (${this.baseUrl}): ${fetchErr instanceof Error ? fetchErr.message : fetchErr} — is \`ollama serve\` running?`
+        `Ollama unreachable (${this.baseUrl}): ${fetchErr instanceof Error ? fetchErr.message : fetchErr} — is \`ollama serve\` running?`,
       );
     }
     clearTimeout(timeoutId);
@@ -150,6 +156,7 @@ export class OllamaProvider implements AIProvider {
     };
 
     const raw = data.choices[0]?.message?.content ?? "";
+    if (keepRaw) return { content: raw };
     const { text, metadata } = parseMetadataBlock(raw, "Ollama");
     const result: { content: string; metadata?: ResponseMetadata } = { content: text };
     if (metadata) result.metadata = metadata;
@@ -189,7 +196,7 @@ export class OllamaProvider implements AIProvider {
       });
     } catch (fetchErr) {
       throw new Error(
-        `Ollama unreachable: ${fetchErr instanceof Error ? fetchErr.message : fetchErr} — is \`ollama serve\` running?`
+        `Ollama unreachable: ${fetchErr instanceof Error ? fetchErr.message : fetchErr} — is \`ollama serve\` running?`,
       );
     }
 
@@ -249,7 +256,7 @@ export class OllamaProvider implements AIProvider {
 
 function parseMetadataBlock(
   raw: string,
-  tag = "Metadata"
+  tag = "Metadata",
 ): { text: string; metadata?: ResponseMetadata } {
   const separator = "---METADATA---";
   const idx = raw.indexOf(separator);
@@ -284,8 +291,10 @@ export class ZAIProvider implements AIProvider {
     messages: ChatMessage[];
     model: string;
     signal?: AbortSignal;
+    raw?: boolean;
+    timeoutMs?: number;
   }): Promise<{ content: string; metadata?: ResponseMetadata }> {
-    const { messages, model, signal } = params;
+    const { messages, model, signal, raw: keepRaw, timeoutMs } = params;
 
     const MAX_RETRIES = 5;
     const RETRY_DELAYS_MS = [2000, 4000, 8000, 12000, 15000];
@@ -301,7 +310,7 @@ export class ZAIProvider implements AIProvider {
       let response: Response;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs ?? 60000);
         // Chain external signal if provided
         if (signal) {
           if (signal.aborted) controller.abort();
@@ -323,14 +332,18 @@ export class ZAIProvider implements AIProvider {
         });
         clearTimeout(timeoutId);
       } catch (fetchErr) {
-        lastError = new Error(`Z.ai network error: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`);
+        lastError = new Error(
+          `Z.ai network error: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`,
+        );
         console.warn(`[ZAI] ${lastError.message}`);
         continue;
       }
 
       if (response.status === 429 || response.status >= 500) {
         const errBody = await response.text().catch(() => "");
-        lastError = new Error(`Z.ai API error (${response.status}): ${errBody || "transient overload"}`);
+        lastError = new Error(
+          `Z.ai API error (${response.status}): ${errBody || "transient overload"}`,
+        );
         console.warn(`[ZAI] ${lastError.message}`);
         continue;
       }
@@ -345,6 +358,7 @@ export class ZAIProvider implements AIProvider {
       };
 
       const raw = data.choices[0]?.message?.content ?? "";
+      if (keepRaw) return { content: raw };
       const { text, metadata } = this.parseMetadata(raw);
       const result: { content: string; metadata?: ResponseMetadata } = { content: text };
       if (metadata) {
@@ -387,7 +401,9 @@ export class ZAIProvider implements AIProvider {
         signal: controller.signal,
       });
     } catch (fetchErr) {
-      throw new Error(`Z.ai network error: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`);
+      throw new Error(
+        `Z.ai network error: ${fetchErr instanceof Error ? fetchErr.message : fetchErr}`,
+      );
     }
 
     if (!response.ok) {
@@ -520,7 +536,7 @@ export class GeminiProvider implements AIProvider {
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${this.apiKey}`,
-      fetchOpts
+      fetchOpts,
     );
 
     if (!response.ok) {
@@ -583,7 +599,7 @@ export class FallbackProvider implements AIProvider {
     } catch (primaryErr) {
       if (params.signal?.aborted) throw primaryErr; // Don't fallback if user cancelled
       console.warn(
-        `[Provider] Primary failed: ${primaryErr instanceof Error ? primaryErr.message : primaryErr}`
+        `[Provider] Primary failed: ${primaryErr instanceof Error ? primaryErr.message : primaryErr}`,
       );
 
       if (!this.fallback) {
@@ -594,7 +610,9 @@ export class FallbackProvider implements AIProvider {
       try {
         return await this.fallback.chat(params);
       } catch (fallbackErr) {
-        console.error(`[Provider] Fallback also failed: ${fallbackErr instanceof Error ? fallbackErr.message : fallbackErr}`);
+        console.error(
+          `[Provider] Fallback also failed: ${fallbackErr instanceof Error ? fallbackErr.message : fallbackErr}`,
+        );
         throw primaryErr; // throw original error since that's the one the user hit first
       }
     }

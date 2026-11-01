@@ -2,7 +2,15 @@
  * Unit tests for task-registry.ts — task lifecycle
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { registerTask, updateTaskStatus, cancelTask, cancelAllTasks, getRunningTasks, getTaskSummary, cleanupOldTasks } from "./task-registry";
+import {
+  registerTask,
+  updateTaskStatus,
+  cancelTask,
+  cancelAllTasks,
+  getRunningTasks,
+  getTaskSummary,
+  cleanupOldTasks,
+} from "./task-registry";
 
 describe("task lifecycle", () => {
   it("registers a new task with QUEUED status", () => {

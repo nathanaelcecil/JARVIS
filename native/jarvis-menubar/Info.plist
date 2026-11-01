@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>JARVIS Menu Bar</string>
+    <key>CFBundleDisplayName</key>
+    <string>JARVIS</string>
+    <key>CFBundleIdentifier</key>
+    <string>local.jarvis.menubar</string>
+    <key>CFBundleExecutable</key>
+    <string>JARVISMenuBar</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <!-- Accessory app: no Dock icon, lives only in the menu bar. -->
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>JARVIS records only while you are dictating or recording a meeting, and transcribes it locally.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>JARVIS listens for the wake word “Jarvis” on this Mac and transcribes dictation locally.</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>

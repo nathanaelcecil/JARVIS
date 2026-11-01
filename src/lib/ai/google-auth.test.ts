@@ -43,7 +43,7 @@ describe("getValidAccessToken", () => {
     mocks.loadGoogleTokens.mockResolvedValue(tokens());
     const { getValidAccessToken } = await import("../../functions/google-auth");
     await expect(
-      getValidAccessToken(["https://www.googleapis.com/auth/gmail.send"])
+      getValidAccessToken(["https://www.googleapis.com/auth/gmail.send"]),
     ).rejects.toThrow(/new Google permissions.*\/api\/auth\/google/s);
     // Reads (no required scopes) still work with the old grant.
     await expect(getValidAccessToken()).resolves.toBe("access-1");
@@ -56,7 +56,7 @@ describe("getValidAccessToken", () => {
       getValidAccessToken([
         "https://www.googleapis.com/auth/gmail.send",
         "https://www.googleapis.com/auth/calendar.events",
-      ])
+      ]),
     ).resolves.toBe("access-1");
   });
 

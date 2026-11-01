@@ -3,7 +3,7 @@
  * No delete/move in this phase.
  */
 
-import { execSync } from "child_process";
+import { execFileSync } from "node:child_process";
 import { readdirSync, statSync, readFileSync } from "fs";
 import { join, resolve, basename, extname } from "path";
 import { homedir } from "os";
@@ -53,11 +53,7 @@ export function listDirectory(args: { path: string }): {
 }
 
 /** Search for files by name pattern (glob-like) within a directory tree */
-export function searchFiles(args: {
-  path: string;
-  pattern: string;
-  maxResults?: number;
-}): {
+export function searchFiles(args: { path: string; pattern: string; maxResults?: number }): {
   success: boolean;
   results: Array<{ path: string; name: string }>;
   error?: string;
@@ -99,20 +95,58 @@ export function searchFiles(args: {
   }
 }
 
-/** Open a file or folder in Finder */
+/**
+ * Extensions macOS EXECUTES rather than reveals when opened. Opening one of
+ * these in Finder would run a program, so it is refused — a deliberate,
+ * security-motivated behavior change from the previous implementation.
+ */
+const EXECUTABLE_EXTENSIONS = new Set([
+  ".command",
+  ".tool",
+  ".terminal",
+  ".sh",
+  ".zsh",
+  ".bash",
+  ".app",
+  ".workflow",
+  ".action",
+]);
+
+/** Open a file or folder in Finder (never executes the target). */
 export function openInFinder(args: { path: string }): {
   success: boolean;
   path: string;
   error?: string;
 } {
+  const targetPath = resolvePath(args.path);
   try {
-    const targetPath = resolvePath(args.path);
-    execSync(`open "${targetPath}"`, { timeout: 5000, stdio: "pipe" });
+    const stat = statSync(targetPath);
+    const ext = extname(targetPath).toLowerCase();
+    if (EXECUTABLE_EXTENSIONS.has(ext)) {
+      return {
+        success: false,
+        path: targetPath,
+        error:
+          `Refusing to open ${ext} file — macOS would execute it instead of ` +
+          `revealing it. Use Finder directly or a terminal if you intend to run it.`,
+      };
+    }
+    if (stat.isFile() && (stat.mode & 0o111) !== 0) {
+      return {
+        success: false,
+        path: targetPath,
+        error:
+          "Refusing to open an executable file — macOS may run it. " +
+          "Use Finder directly if you intend to execute it.",
+      };
+    }
+    // argv array, no shell: the path is data, never shell syntax.
+    execFileSync("open", [targetPath], { timeout: 5000, stdio: "pipe" });
     return { success: true, path: targetPath };
   } catch (err) {
     return {
       success: false,
-      path: args.path,
+      path: targetPath,
       error: `Cannot open in Finder: ${err instanceof Error ? err.message : err}`,
     };
   }

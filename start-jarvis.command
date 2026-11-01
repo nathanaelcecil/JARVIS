@@ -15,8 +15,17 @@ echo ""
 # Step 1: Check if .env.local exists
 if [ ! -f ".env.local" ]; then
     echo "⚠  .env.local not found."
-    echo "   Please copy .env.local.example to .env.local and fill in your keys."
+    echo "   Please copy .env.local.template to .env.local and fill in your keys."
     echo "   See SETUP.md for details."
+    echo ""
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+# Bun runs both the web app and the local tool agent.
+if ! command -v bun &>/dev/null; then
+    echo "⚠  Bun is not installed."
+    echo "   Install it from https://bun.sh, then double-click this file again."
     echo ""
     read -p "Press Enter to exit..."
     exit 1
@@ -107,7 +116,7 @@ if [ $? -ne 0 ]; then
 fi
 
 PYVER=$($PYTHON -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-echo "[1/5] Found compatible Python: $PYTHON (v$PYVER)"
+echo "[1/6] Found compatible Python: $PYTHON (v$PYVER)"
 
 # ────────────────────────────────────────────────────────────
 #  Create / activate virtual environment
@@ -144,7 +153,7 @@ source .xtts-venv/bin/activate
 #  Step 2: Install PyTorch + Torchaudio (must be explicit —
 #  coqui-tts doesn't pull them in automatically)
 # ────────────────────────────────────────────────────────────
-echo "[2/5] Installing PyTorch and Torchaudio..."
+echo "[2/6] Installing PyTorch and Torchaudio..."
 echo "      (This is a large download — 2+ GB — and takes a few minutes.)"
 pip install torch torchaudio 2>&1
 TORCH_EXIT=$?
@@ -171,7 +180,7 @@ echo "      PyTorch installed."
 #  but transformers 5.1+ removed isin_mps_friendly which XTTS needs.
 #  Pin to <5.1 until the upstream fix lands in a release.
 # ────────────────────────────────────────────────────────────
-echo "[3/5] Installing coqui-tts, flask, and compatible transformers..."
+echo "[3/6] Installing coqui-tts, flask, and compatible transformers..."
 pip install "coqui-tts[codec]" "transformers>=4.57,<5.1" flask 2>&1
 TTS_EXIT=$?
 if [ $TTS_EXIT -ne 0 ]; then
@@ -193,7 +202,7 @@ echo "      coqui-tts installed."
 #  Step 4: Verify imports actually work
 #  (pip can return 0 even when native deps are broken)
 # ────────────────────────────────────────────────────────────
-echo "[4/5] Verifying imports..."
+echo "[4/6] Verifying imports..."
 python -c "import torch; print(f'      PyTorch {torch.__version__} OK')" 2>&1
 if [ $? -ne 0 ]; then
     echo ""

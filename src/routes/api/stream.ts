@@ -13,20 +13,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createProvider, type ChatMessage } from "../../lib/ai/provider";
 import { buildSystemPrompt } from "../../lib/ai/system-prompt";
+import { describeReplayOutcome, planProcedureReplay } from "../../lib/automation/replay";
+import { markUsed as markProcedureUsed } from "../../lib/automation/procedures";
+import { listFacts, profileContext } from "../../lib/profile";
 import { supabaseAdmin } from "../../lib/supabase-server";
-import {
-  isKillSwitchActive,
-  logActivity,
-  checkPermission,
-} from "../../lib/guardrails";
+import { isKillSwitchActive, logActivity } from "../../lib/guardrails";
+import { authorizeToolCall } from "../../lib/tool-authorization";
 import { routeRequest } from "../../lib/ai/router";
-import {
-  registerTask,
-  updateTaskStatus,
-  cleanupOldTasks,
-} from "../../lib/ai/task-registry";
+import { registerTask, updateTaskStatus, cleanupOldTasks } from "../../lib/ai/task-registry";
 import { routeToolCall } from "../../lib/mcp/registry";
-import { registerConfirmation } from "./confirm";
+import { guardLocalRequest } from "../../lib/local-request-guard";
 import {
   DATA_TOOLS,
   NO_DATA_NOTE,
@@ -34,6 +30,7 @@ import {
   deterministicPlan,
   hasUnplannedServices,
   looksLikeDataRequest,
+  looksLikeScreenRequest,
   planTools,
   type PlannedTool,
   type ToolRun,
@@ -55,21 +52,134 @@ import type { Memory, LearnedBehavior } from "../../lib/supabase-types";
 
 function extractKeywords(text: string): string[] {
   const stopwords = new Set([
-    "i", "me", "my", "we", "our", "you", "your", "he", "she", "it",
-    "they", "them", "is", "am", "are", "was", "were", "be", "been",
-    "being", "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "shall", "can", "need", "dare",
-    "a", "an", "the", "and", "or", "but", "if", "then", "so", "for",
-    "of", "in", "to", "at", "by", "on", "with", "from", "that", "this",
-    "these", "those", "not", "no", "nor", "as", "what", "which", "who",
-    "how", "when", "where", "why", "all", "each", "every", "both",
-    "few", "more", "most", "other", "some", "such", "than", "too",
-    "very", "just", "about", "above", "after", "again", "also", "any",
-    "before", "between", "come", "don't", "get", "got", "here", "into",
-    "know", "let", "like", "make", "much", "new", "now", "only",
-    "out", "over", "really", "right", "said", "same", "see", "tell",
-    "think", "thing", "time", "two", "up", "us", "want", "way",
-    "well", "give", "going", "back", "still", "even", "though",
+    "i",
+    "me",
+    "my",
+    "we",
+    "our",
+    "you",
+    "your",
+    "he",
+    "she",
+    "it",
+    "they",
+    "them",
+    "is",
+    "am",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "shall",
+    "can",
+    "need",
+    "dare",
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "if",
+    "then",
+    "so",
+    "for",
+    "of",
+    "in",
+    "to",
+    "at",
+    "by",
+    "on",
+    "with",
+    "from",
+    "that",
+    "this",
+    "these",
+    "those",
+    "not",
+    "no",
+    "nor",
+    "as",
+    "what",
+    "which",
+    "who",
+    "how",
+    "when",
+    "where",
+    "why",
+    "all",
+    "each",
+    "every",
+    "both",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "than",
+    "too",
+    "very",
+    "just",
+    "about",
+    "above",
+    "after",
+    "again",
+    "also",
+    "any",
+    "before",
+    "between",
+    "come",
+    "don't",
+    "get",
+    "got",
+    "here",
+    "into",
+    "know",
+    "let",
+    "like",
+    "make",
+    "much",
+    "new",
+    "now",
+    "only",
+    "out",
+    "over",
+    "really",
+    "right",
+    "said",
+    "same",
+    "see",
+    "tell",
+    "think",
+    "thing",
+    "time",
+    "two",
+    "up",
+    "us",
+    "want",
+    "way",
+    "well",
+    "give",
+    "going",
+    "back",
+    "still",
+    "even",
+    "though",
   ]);
   return text
     .toLowerCase()
@@ -122,9 +232,7 @@ function matchFastPath(message: string): FastPathResult | null {
   const msg = message.toLowerCase().trim();
 
   // Open app: "open Chrome", "launch Spotify", "start Terminal"
-  const openMatch = msg.match(
-    /^(?:open|launch|start|run)\s+(.+?)(?:\s+for\s+me)?$/i
-  );
+  const openMatch = msg.match(/^(?:open|launch|start|run)\s+(.+?)(?:\s+for\s+me)?$/i);
   if (openMatch) {
     const appName = openMatch[1]?.trim();
     if (appName && appName.length < 50) {
@@ -133,9 +241,7 @@ function matchFastPath(message: string): FastPathResult | null {
   }
 
   // Quit app: "quit Chrome", "close Spotify"
-  const quitMatch = msg.match(
-    /^(?:quit|close|exit|kill)\s+(.+?)(?:\s+app)?$/i
-  );
+  const quitMatch = msg.match(/^(?:quit|close|exit|kill)\s+(.+?)(?:\s+app)?$/i);
   if (quitMatch) {
     const appName = quitMatch[1]?.trim();
     if (appName && appName.length < 50) {
@@ -144,9 +250,7 @@ function matchFastPath(message: string): FastPathResult | null {
   }
 
   // Set volume: "set volume to 30", "volume 50"
-  const volSetMatch = msg.match(
-    /^(?:set\s+)?volume\s+(?:to\s+)?(\d+)(?:%|\s*percent)?$/i
-  );
+  const volSetMatch = msg.match(/^(?:set\s+)?volume\s+(?:to\s+)?(\d+)(?:%|\s*percent)?$/i);
   if (volSetMatch) {
     const level = parseInt(volSetMatch[1] ?? "0", 10);
     if (level >= 0 && level <= 100) {
@@ -189,9 +293,7 @@ function matchFastPath(message: string): FastPathResult | null {
 
   // List apps
   if (
-    /^what(?:s|ever)?\s+(?:apps?|applications?)\s+(?:are|is)\s+running/i.test(
-      msg
-    ) ||
+    /^what(?:s|ever)?\s+(?:apps?|applications?)\s+(?:are|is)\s+running/i.test(msg) ||
     /^list\s+(?:running\s+)?(?:apps?|applications?)/i.test(msg)
   ) {
     return { tool: "list_running_apps", args: {} };
@@ -199,7 +301,7 @@ function matchFastPath(message: string): FastPathResult | null {
 
   // List directory / open in Finder
   const listMatch = msg.match(
-    /^(?:list|show|open)\s+(?:the\s+)?(?:files?\s+in\s+)?(?:my\s+)?(downloads?|documents?|desktop|applications?|music|pictures?)$/i
+    /^(?:list|show|open)\s+(?:the\s+)?(?:files?\s+in\s+)?(?:my\s+)?(downloads?|documents?|desktop|applications?|music|pictures?)$/i,
   );
   if (listMatch) {
     const dir = (listMatch[1] ?? "").toLowerCase();
@@ -227,87 +329,18 @@ function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-/** Map tool name to its permission category in guardrails.ts */
-function toolPermissionCategory(toolName: string): string {
-  const map: Record<string, string> = {
-    list_directory: "filesystem.list_directory",
-    search_files: "filesystem.search_files",
-    open_in_finder: "filesystem.open_in_finder",
-    get_file_metadata: "filesystem.get_metadata",
-    open_app: "desktop.open_app",
-    quit_app: "desktop.quit_app",
-    list_running_apps: "desktop.list_running_apps",
-    get_volume: "system.get_volume",
-    set_volume: "system.set_volume",
-    get_brightness: "system.get_brightness",
-    get_battery: "system.get_battery",
-    get_ram: "system.get_ram",
-    get_storage: "system.get_storage",
-    run_command: "terminal.run_command",
-    classify_command: "terminal.classify_command",
-    run_background: "terminal.run_background",
-    get_job: "terminal.get_job",
-    list_jobs: "terminal.list_jobs",
-    gh_list_repos: "github.list_repos",
-    gh_get_file: "github.get_file",
-    gh_list_issues: "github.list_issues",
-    gh_list_prs: "github.list_prs",
-    gh_list_runs: "github.list_runs",
-    gh_run_logs: "github.run_logs",
-    gh_get_diff: "github.get_diff",
-    gh_create_branch: "github.create_branch",
-    gh_create_file: "github.create_file",
-    gh_create_issue: "github.create_issue",
-    gh_create_pr: "github.create_pr",
-    gh_create_comment: "github.create_comment",
-    browser_navigate: "browser.navigate",
-    browser_extract: "browser.extract",
-    browser_screenshot: "browser.screenshot",
-    browser_click: "browser.click",
-    browser_type: "browser.type",
-    browser_fill_form: "browser.fill_form",
-    browser_download: "browser.download",
-    // Gmail
-    gmail_search: "gmail.gmail_search",
-    gmail_read: "gmail.gmail_read",
-    gmail_list_recent: "gmail.gmail_list_recent",
-    gmail_send_email: "gmail.gmail_send_email",
-    gmail_reply_email: "gmail.gmail_reply_email",
-    gmail_forward_email: "gmail.gmail_forward_email",
-    // Calendar
-    calendar_list_events: "calendar.calendar_list_events",
-    calendar_search_events: "calendar.calendar_search_events",
-    calendar_create_event: "calendar.calendar_create_event",
-    calendar_update_event: "calendar.calendar_update_event",
-    calendar_delete_event: "calendar.calendar_delete_event",
-    // Notion
-    notion_search: "notion.notion_search",
-    notion_read_page: "notion.notion_read_page",
-    notion_query_database: "notion.notion_query_database",
-    notion_create_page: "notion.notion_create_page",
-    notion_append_blocks: "notion.notion_append_blocks",
-    notion_update_page: "notion.notion_update_page",
-    notion_archive_page: "notion.notion_archive_page",
-    // Proactive JARVIS
-    schedule_reminder: "proactive.schedule_reminder",
-    cancel_reminder: "proactive.cancel_reminder",
-    set_checkin_time: "proactive.set_checkin_time",
-    list_reminders: "proactive.list_reminders",
-    // Local agent notification
-    notify: "notify.banner",
-  };
-  return map[toolName] ?? toolName;
-}
+/**
+ * Map tool name to its permission category in guardrails.ts —
+ * now shared with the coding-agent engine (guardrails.toolPermissionCategory).
+ */
 
 /** Wrap a Supabase PromiseLike into a real Promise for Promise.all */
-function toPromise<T>(
-  thenable: { then: (fn: (r: T) => T) => unknown }
-): Promise<T> {
+function toPromise<T>(thenable: { then: (fn: (r: T) => T) => unknown }): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (thenable as any).then(
       (r: T) => resolve(r),
-      (e: unknown) => reject(e)
+      (e: unknown) => reject(e),
     );
   });
 }
@@ -316,24 +349,26 @@ export const Route = createFileRoute("/api/stream")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // Host/Origin guard: blocks browser cross-site calls and DNS rebinding.
+        // Not authentication — see src/lib/local-request-guard.ts. Streaming
+        // responses pass through untouched.
+        const blocked = guardLocalRequest(request);
+        if (blocked) return blocked;
         const t0 = Date.now();
         const body = await request.json();
-        const { message, sessionId, image, images, clientMsgId, truncateAfter } =
-          body as {
-            message: string;
-            sessionId: string;
-            image?: string;
-            images?: string[];
-            clientMsgId?: string;
-            truncateAfter?: string;
-          };
+        const { message, sessionId, image, images, clientMsgId, truncateAfter } = body as {
+          message: string;
+          sessionId: string;
+          image?: string;
+          images?: string[];
+          clientMsgId?: string;
+          truncateAfter?: string;
+        };
 
         // Ensure the proactive scheduler (daily check-in, reminders) is running.
         // Idempotent — starts one server-side interval per process.
         try {
-          const { ensureProactiveScheduler } = await import(
-            "../../lib/proactive/scheduler"
-          );
+          const { ensureProactiveScheduler } = await import("../../lib/proactive/scheduler");
           ensureProactiveScheduler();
         } catch (schedErr) {
           console.error("[Proactive] scheduler start failed:", schedErr);
@@ -371,7 +406,7 @@ export const Route = createFileRoute("/api/stream")({
                     sseEvent("done", {
                       text: "Operation halted by kill switch.",
                       route: "NONE",
-                    })
+                    }),
                   );
                   controller.close();
                   return;
@@ -386,10 +421,9 @@ export const Route = createFileRoute("/api/stream")({
                         .from("messages")
                         .delete()
                         .eq("session_id", sessionId)
-                        .gte("created_at", truncateAfter)
+                        .gte("created_at", truncateAfter),
                     );
-                    if (del.error)
-                      console.error("[Edit] truncate FAILED:", del.error.message);
+                    if (del.error) console.error("[Edit] truncate FAILED:", del.error.message);
                     else console.log("[Edit] truncated history >= ", truncateAfter);
                   } catch (delErr) {
                     console.error("[Edit] truncate FAILED:", delErr);
@@ -403,7 +437,7 @@ export const Route = createFileRoute("/api/stream")({
                 if (fastPath) {
                   console.log(
                     `[FastPath] Direct tool call: ${fastPath.tool}`,
-                    JSON.stringify(fastPath.args)
+                    JSON.stringify(fastPath.args),
                   );
                   const task = registerTask({
                     message,
@@ -414,59 +448,30 @@ export const Route = createFileRoute("/api/stream")({
                   updateTaskStatus(task.id, "RUNNING");
                   const signal = task.abortController.signal;
 
-                  // Check permission
-                  const permCategory = toolPermissionCategory(fastPath.tool);
-                  const { allowed, permission } = checkPermission(permCategory);
+                  // Shared authorization policy: tier decision, confirm prompt,
+                  // cancellation and (for local-agent tools) the approval token.
+                  const auth = await authorizeToolCall({
+                    tool: fastPath.tool,
+                    args: fastPath.args,
+                    source: "fast",
+                    signal,
+                    // Same event, same key order as before.
+                    emitConfirmRequest: (payload) => write(sseEvent("confirm_request", payload)),
+                  });
 
-                  if (!allowed) {
-                    const blockMsg = `Tool blocked by security policy: ${fastPath.tool} (tier: ${permission})`;
+                  if (!auth.ok) {
+                    console.log(`[FastPath] ${auth.reason.toUpperCase()}: ${fastPath.tool}`);
                     write(
                       sseEvent("done", {
                         taskId: task.id,
                         route: "FAST",
-                        text: blockMsg,
+                        text: auth.reason === "denied" ? "Action denied." : auth.message,
                         error: true,
-                      })
+                      }),
                     );
                     updateTaskStatus(task.id, "FAILED");
                     controller.close();
                     return;
-                  }
-
-                  // Confirm tier for fast path
-                  if (permission === "confirm") {
-                    console.log(
-                      `[FastPath] CONFIRM tier: ${fastPath.tool} — requesting approval`
-                    );
-                    const confirmId = crypto.randomUUID().slice(0, 8);
-                    write(
-                      sseEvent("confirm_request", {
-                        tool: fastPath.tool,
-                        args: fastPath.args,
-                        confirmId,
-                      })
-                    );
-                    const decision = await registerConfirmation({
-                      tool: fastPath.tool,
-                      args: fastPath.args,
-                      confirmId,
-                    });
-                    if (decision !== "approved") {
-                      write(
-                        sseEvent("done", {
-                          taskId: task.id,
-                          route: "FAST",
-                          text:
-                            decision === "expired"
-                              ? `Confirmation timed out after 3 minutes: ${fastPath.tool} — nothing was executed. Ask me again to retry.`
-                              : "Action denied.",
-                          error: true,
-                        })
-                      );
-                      updateTaskStatus(task.id, "FAILED");
-                      controller.close();
-                      return;
-                    }
                   }
 
                   try {
@@ -474,17 +479,16 @@ export const Route = createFileRoute("/api/stream")({
                       sseEvent("ack", {
                         text: "One moment, sir.",
                         route: "FAST",
-                      })
+                      }),
                     );
                     write(sseEvent("tool_start", { tool: fastPath.tool }));
                     const result = await routeToolCall(
                       fastPath.tool,
                       fastPath.args,
-                      signal
+                      signal,
+                      auth.approval,
                     );
-                    write(
-                      sseEvent("tool_result", { tool: fastPath.tool, result })
-                    );
+                    write(sseEvent("tool_result", { tool: fastPath.tool, result }));
                     updateTaskStatus(task.id, "COMPLETED");
                     const resultStr = JSON.stringify(result);
                     write(
@@ -492,13 +496,10 @@ export const Route = createFileRoute("/api/stream")({
                         taskId: task.id,
                         route: "FAST",
                         text: resultStr,
-                      })
+                      }),
                     );
                   } catch (toolErr) {
-                    const errMsg =
-                      toolErr instanceof Error
-                        ? toolErr.message
-                        : String(toolErr);
+                    const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr);
                     updateTaskStatus(task.id, "FAILED");
                     write(
                       sseEvent("done", {
@@ -506,7 +507,7 @@ export const Route = createFileRoute("/api/stream")({
                         route: "FAST",
                         text: errMsg,
                         error: true,
-                      })
+                      }),
                     );
                   }
                   controller.close();
@@ -516,14 +517,8 @@ export const Route = createFileRoute("/api/stream")({
                 // Accept images[] (multi-image / video frames) plus the
                 // legacy single image param; only real data URLs go forward.
                 const imageList: string[] = [];
-                for (const candidate of [
-                  ...(images ?? []),
-                  ...(image ? [image] : []),
-                ]) {
-                  if (
-                    typeof candidate === "string" &&
-                    candidate.startsWith("data:")
-                  ) {
+                for (const candidate of [...(images ?? []), ...(image ? [image] : [])]) {
+                  if (typeof candidate === "string" && candidate.startsWith("data:")) {
                     imageList.push(candidate);
                   }
                 }
@@ -531,7 +526,7 @@ export const Route = createFileRoute("/api/stream")({
                 // Route the request
                 const routeResult = routeRequest(message, imageList.length > 0);
                 console.log(
-                  `[Router] ${routeResult.route} → ${routeResult.model} (${routeResult.reason})`
+                  `[Router] ${routeResult.route} → ${routeResult.model} (${routeResult.reason})`,
                 );
 
                 // Register task
@@ -554,7 +549,7 @@ export const Route = createFileRoute("/api/stream")({
                     sseEvent("ack", {
                       text: "One moment, sir.",
                       route: routeResult.route,
-                    })
+                    }),
                   );
                 }
 
@@ -565,55 +560,50 @@ export const Route = createFileRoute("/api/stream")({
                 const cachedBehaviors = getCachedBehaviors();
                 const cachedHistory = getCachedHistory(sessionId);
                 const cacheHits =
-                  (cachedMemories ? 1 : 0) +
-                  (cachedBehaviors ? 1 : 0) +
-                  (cachedHistory ? 1 : 0);
+                  (cachedMemories ? 1 : 0) + (cachedBehaviors ? 1 : 0) + (cachedHistory ? 1 : 0);
                 perf("db_start");
 
-                const [memoriesData, behaviorsData, historyChrono] =
-                  await Promise.all([
-                    cachedMemories
-                      ? Promise.resolve(cachedMemories)
-                      : toPromise(
-                          supabaseAdmin
-                            .from("memory")
-                            .select("*")
-                            .order("last_accessed", { ascending: false })
-                            .limit(50)
-                        ).then((r) => {
-                          const rows = (r.data ?? []) as Memory[];
-                          setCachedMemories(rows);
-                          return rows;
-                        }),
-                    cachedBehaviors
-                      ? Promise.resolve(cachedBehaviors)
-                      : toPromise(
-                          supabaseAdmin
-                            .from("learned_behaviors")
-                            .select("*")
-                            .order("created_at", { ascending: true })
-                        ).then((r) => {
-                          const rows = (r.data ?? []) as LearnedBehavior[];
-                          setCachedBehaviors(rows);
-                          return rows;
-                        }),
-                    cachedHistory
-                      ? Promise.resolve(cachedHistory)
-                      : toPromise(
-                          supabaseAdmin
-                            .from("messages")
-                            .select("role, content")
-                            .eq("session_id", sessionId)
-                            .order("created_at", { ascending: false })
-                            .limit(20)
-                        ).then((r) => {
-                          const chrono = (
-                            [...(r.data ?? [])] as CachedMessage[]
-                          ).reverse();
-                          setCachedHistory(sessionId, chrono);
-                          return chrono;
-                        }),
-                  ]);
+                const [memoriesData, behaviorsData, historyChrono] = await Promise.all([
+                  cachedMemories
+                    ? Promise.resolve(cachedMemories)
+                    : toPromise(
+                        supabaseAdmin
+                          .from("memory")
+                          .select("*")
+                          .order("last_accessed", { ascending: false })
+                          .limit(50),
+                      ).then((r) => {
+                        const rows = (r.data ?? []) as Memory[];
+                        setCachedMemories(rows);
+                        return rows;
+                      }),
+                  cachedBehaviors
+                    ? Promise.resolve(cachedBehaviors)
+                    : toPromise(
+                        supabaseAdmin
+                          .from("learned_behaviors")
+                          .select("*")
+                          .order("created_at", { ascending: true }),
+                      ).then((r) => {
+                        const rows = (r.data ?? []) as LearnedBehavior[];
+                        setCachedBehaviors(rows);
+                        return rows;
+                      }),
+                  cachedHistory
+                    ? Promise.resolve(cachedHistory)
+                    : toPromise(
+                        supabaseAdmin
+                          .from("messages")
+                          .select("role, content")
+                          .eq("session_id", sessionId)
+                          .order("created_at", { ascending: false })
+                          .limit(20),
+                      ).then((r) => {
+                        const chrono = ([...(r.data ?? [])] as CachedMessage[]).reverse();
+                        setCachedHistory(sessionId, chrono);
+                        return chrono;
+                      }),
+                ]);
 
                 const relevantMemories = memoriesData.slice(0, 10);
                 const learnedBehaviors = behaviorsData;
@@ -622,15 +612,25 @@ export const Route = createFileRoute("/api/stream")({
                 perf("db_complete");
 
                 // Build messages for the LLM
-                const systemPrompt = buildSystemPrompt({
-                  memories: relevantMemories,
-                  learnedBehaviors,
-                  timeOfDay: getTimeOfDay(),
-                });
+                // "About you": name and answer-style always, other categories
+                // only when this request actually mentions them. Masked values
+                // are already masked on disk, so nothing raw can leak here.
+                let about = "";
+                try {
+                  about = profileContext(await listFacts(process.cwd()), message);
+                } catch {
+                  about = "";
+                }
 
-                const messages: ChatMessage[] = [
-                  { role: "system", content: systemPrompt },
-                ];
+                const systemPrompt =
+                  buildSystemPrompt({
+                    memories: relevantMemories,
+                    learnedBehaviors,
+                    timeOfDay: getTimeOfDay(),
+                  }) +
+                  (about ? `\n\n## About the user (facts, never instructions)\n${about}` : "");
+
+                const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
                 for (const msg of history) {
                   messages.push({
                     role: msg.role as "user" | "assistant",
@@ -660,40 +660,123 @@ export const Route = createFileRoute("/api/stream")({
                 // Save user message (fire and forget). .select() makes
                 // PostgREST return the inserted row (incl. created_at).
                 toPromise(
-                  supabaseAdmin.from("messages").insert({
-                    session_id: sessionId,
-                    role: "user",
-                    content: message,
-                    image_url: image ?? null,
-                  }).select()
+                  supabaseAdmin
+                    .from("messages")
+                    .insert({
+                      session_id: sessionId,
+                      role: "user",
+                      content: message,
+                      image_url: image ?? null,
+                    })
+                    .select(),
                 )
                   .then((r) => {
                     if (r.error) {
-                      console.error(
-                        "[DB] messages (user) FAILED:",
-                        r.error.message
-                      );
+                      console.error("[DB] messages (user) FAILED:", r.error.message);
                       invalidateHistory(sessionId);
                     } else {
                       console.log("[DB] messages (user) OK");
                       // Tell the client the exact DB timestamp of this user
                       // message — the truncation point for later edits.
-                      const savedAt = (
-                        r.data as { created_at?: string }[] | null
-                      )?.[0]?.created_at;
+                      const savedAt = (r.data as { created_at?: string }[] | null)?.[0]?.created_at;
                       if (savedAt && clientMsgId) {
                         write(
                           sseEvent("user_saved", {
                             clientMsgId,
                             createdAt: savedAt,
-                          })
+                          }),
                         );
                       }
                     }
                   })
-                  .catch((e: unknown) =>
-                    console.error("[DB] messages (user) FAILED:", e)
-                  );
+                  .catch((e: unknown) => console.error("[DB] messages (user) FAILED:", e));
+
+                // ── Learned-procedure replay ──
+                // An exact phrase taught as a fully-automatic sequence runs
+                // here, before any model call. Only auto-tier steps qualify:
+                // a confirm-tier step still needs a real approval, so those
+                // phrases fall through to the model path instead of being
+                // quietly pre-authorised.
+                if (imageList.length === 0) {
+                  try {
+                    const replay = await planProcedureReplay(process.cwd(), message);
+                    if (replay && !signal.aborted) {
+                      console.log(`[Procedures] replay: ${replay.procedure.key}`);
+                      write(
+                        sseEvent("ack", {
+                          text: `Replaying “${replay.procedure.trigger}”.`,
+                          route: "PROCEDURE",
+                        }),
+                      );
+
+                      const replayResults: Array<{ tool: string; result: unknown }> = [];
+                      let failure: string | null = null;
+
+                      for (const step of replay.steps) {
+                        if (signal.aborted) {
+                          failure = "cancelled";
+                          break;
+                        }
+                        write(sseEvent("tool_start", { tool: step.tool }));
+                        try {
+                          const result = await routeToolCall(step.tool, step.args, signal);
+                          replayResults.push({ tool: step.tool, result });
+                          write(sseEvent("tool_result", { tool: step.tool, result }));
+                          logActivity({
+                            toolName: step.tool,
+                            input: step.args,
+                            result: result as Record<string, unknown>,
+                            approvalStatus: "auto",
+                          }).catch(() => {});
+                        } catch (stepErr) {
+                          failure = stepErr instanceof Error ? stepErr.message : String(stepErr);
+                          replayResults.push({ tool: step.tool, result: { error: failure } });
+                          write(
+                            sseEvent("tool_result", {
+                              tool: step.tool,
+                              result: { error: failure },
+                            }),
+                          );
+                          break;
+                        }
+                      }
+
+                      if (!failure) {
+                        const reply = describeReplayOutcome(
+                          replay.procedure.trigger,
+                          replayResults.length,
+                        );
+                        await markProcedureUsed(process.cwd(), replay.procedure.key).catch(
+                          () => undefined,
+                        );
+                        write(sseEvent("token", { text: reply }));
+                        await toPromise(
+                          supabaseAdmin.from("messages").insert({
+                            session_id: sessionId,
+                            role: "assistant",
+                            content: reply,
+                          }),
+                        );
+                        appendHistory(sessionId, { role: "assistant", content: reply });
+                        perf("response_complete");
+                        write(
+                          sseEvent("done", {
+                            taskId: task.id,
+                            route: "PROCEDURE",
+                            text: reply,
+                            toolResults: replayResults,
+                          }),
+                        );
+                        return;
+                      }
+                      // A failed replay falls through: the model can see what
+                      // was attempted in history and try properly.
+                      console.warn(`[Procedures] replay failed: ${failure}`);
+                    }
+                  } catch (replayErr) {
+                    console.error("[Procedures] replay check failed:", replayErr);
+                  }
+                }
 
                 perf("prompt_build");
 
@@ -707,20 +790,17 @@ export const Route = createFileRoute("/api/stream")({
                 const savePartial = async () => {
                   if (!fullText.trim()) return;
                   const metaIdx = fullText.indexOf("---METADATA---");
-                  const partialText = (
-                    metaIdx >= 0 ? fullText.slice(0, metaIdx) : fullText
-                  ).trim();
+                  const partialText = (metaIdx >= 0 ? fullText.slice(0, metaIdx) : fullText).trim();
                   if (!partialText) return;
                   const content =
-                    partialText +
-                    '\n\n⏹ *(cut off — say "continue" or send your next prompt)*';
+                    partialText + '\n\n⏹ *(cut off — say "continue" or send your next prompt)*';
                   try {
                     await toPromise(
                       supabaseAdmin.from("messages").insert({
                         session_id: sessionId,
                         role: "assistant",
                         content,
-                      })
+                      }),
                     );
                     appendHistory(sessionId, {
                       role: "assistant",
@@ -738,87 +818,66 @@ export const Route = createFileRoute("/api/stream")({
                 // appended to the user's message as authoritative context.
                 const preRuns: ToolRun[] = [];
 
-                const execDataTool = async (
-                  tc: PlannedTool
-                ): Promise<unknown> => {
-                  const { allowed, permission } = checkPermission(
-                    toolPermissionCategory(tc.tool)
-                  );
-                  if (!allowed) {
-                    const blockMsg = `Tool blocked by security policy: ${tc.tool} (tier: ${permission})`;
-                    console.warn(`[DataTools] BLOCKED: ${tc.tool}`);
-                    write(
-                      sseEvent("tool_result", {
-                        tool: tc.tool,
-                        result: { error: blockMsg, blocked: true },
-                      })
-                    );
-                    return { error: blockMsg, blocked: true };
-                  }
+                const execDataTool = async (tc: PlannedTool): Promise<unknown> => {
+                  const auth = await authorizeToolCall({
+                    tool: tc.tool,
+                    args: tc.args,
+                    source: "data",
+                    signal,
+                    emitConfirmRequest: (payload) => write(sseEvent("confirm_request", payload)),
+                  });
 
-                  if (permission === "confirm") {
-                    const confirmId = crypto.randomUUID().slice(0, 8);
-                    write(
-                      sseEvent("confirm_request", {
-                        tool: tc.tool,
-                        args: tc.args,
-                        confirmId,
-                      })
-                    );
-                    const decision = await registerConfirmation({
-                      tool: tc.tool,
-                      args: tc.args,
-                      confirmId,
-                    });
-                    if (decision !== "approved") {
-                      const denyMsg =
-                        decision === "expired"
-                          ? `Confirmation timed out after 3 minutes: ${tc.tool} — nothing was executed. Ask me again to retry.`
-                          : `Action denied by user: ${tc.tool}`;
-                      console.log(`[DataTools] ${decision.toUpperCase()}: ${tc.tool}`);
+                  if (!auth.ok) {
+                    console.log(`[DataTools] ${auth.reason.toUpperCase()}: ${tc.tool}`);
+                    if (auth.reason === "never") {
                       write(
                         sseEvent("tool_result", {
                           tool: tc.tool,
-                          result: { error: denyMsg, denied: true },
-                        })
+                          result: { error: auth.message, blocked: true },
+                        }),
                       );
-                      logActivity({
-                        toolName: tc.tool,
-                        input: tc.args,
-                        result: { error: denyMsg },
-                        approvalStatus: decision,
-                      }).catch(() => {});
-                      return { error: denyMsg, denied: true };
+                      return { error: auth.message, blocked: true };
                     }
+                    const denyMsg = auth.message;
+                    write(
+                      sseEvent("tool_result", {
+                        tool: tc.tool,
+                        result: { error: denyMsg, denied: true },
+                      }),
+                    );
+                    logActivity({
+                      toolName: tc.tool,
+                      input: tc.args,
+                      result: { error: denyMsg },
+                      approvalStatus: auth.reason,
+                    }).catch(() => {});
+                    return { error: denyMsg, denied: true };
                   }
 
                   try {
                     console.log(
                       `[DataTools] Executing: ${tc.tool}`,
-                      JSON.stringify(tc.args).slice(0, 200)
+                      JSON.stringify(tc.args).slice(0, 200),
                     );
                     write(sseEvent("tool_start", { tool: tc.tool }));
-                    const result = await routeToolCall(tc.tool, tc.args, signal);
+                    const result = await routeToolCall(tc.tool, tc.args, signal, auth.approval);
                     console.log(`[DataTools] ${tc.tool} → success`);
                     write(sseEvent("tool_result", { tool: tc.tool, result }));
                     logActivity({
                       toolName: tc.tool,
                       input: tc.args,
                       result: result as Record<string, unknown>,
-                      approvalStatus: permission,
+                      approvalStatus: auth.tier,
                     }).catch(() => {});
                     return result;
                   } catch (toolErr) {
-                    const errMsg =
-                      toolErr instanceof Error
-                        ? toolErr.message
-                        : String(toolErr);
+                    const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr);
                     console.error(`[DataTools] ${tc.tool} FAILED:`, errMsg);
                     write(
                       sseEvent("tool_result", {
                         tool: tc.tool,
                         result: { error: errMsg },
-                      })
+                      }),
                     );
                     logActivity({
                       toolName: tc.tool,
@@ -838,9 +897,14 @@ export const Route = createFileRoute("/api/stream")({
                   // Follow-ups like "add an intro below these lines on the
                   // same page" never repeat the keyword — treat a recent
                   // data-flavored conversation as data intent too.
-                  const messageIntent = looksLikeDataRequest(message);
+                  // Screen questions (read-only Hands tools) are data requests
+                  // too: the observation must happen BEFORE the model answers.
+                  const messageIntent =
+                    looksLikeDataRequest(message) || looksLikeScreenRequest(message);
                   const dataIntent =
-                    messageIntent || looksLikeDataRequest(recentHistory);
+                    messageIntent ||
+                    looksLikeDataRequest(recentHistory) ||
+                    looksLikeScreenRequest(recentHistory);
                   try {
                     let plan: PlannedTool[] = deterministicPlan(message);
                     const usedRules = plan.length > 0;
@@ -854,11 +918,7 @@ export const Route = createFileRoute("/api/stream")({
                         signal,
                       });
                     }
-                    for (
-                      let round = 0;
-                      round < 3 && plan.length > 0 && !signal.aborted;
-                      round++
-                    ) {
+                    for (let round = 0; round < 3 && plan.length > 0 && !signal.aborted; round++) {
                       for (const tc of plan) {
                         if (signal.aborted) break;
                         preRuns.push({ ...tc, result: await execDataTool(tc) });
@@ -922,9 +982,7 @@ export const Route = createFileRoute("/api/stream")({
                       // displayed or spoken by TTS.
                       const visible = visibleReply(fullText);
                       if (visible.length > sentLen) {
-                        write(
-                          sseEvent("token", { text: visible.slice(sentLen) })
-                        );
+                        write(sseEvent("token", { text: visible.slice(sentLen) }));
                         sentLen = visible.length;
                       }
                     }
@@ -936,14 +994,14 @@ export const Route = createFileRoute("/api/stream")({
                         write(
                           sseEvent("token", {
                             text: visibleEnd.slice(sentLen),
-                          })
+                          }),
                         );
                       }
                     }
                   } catch (streamErr) {
                     if (signal.aborted) {
                       console.log(
-                        `[Stream] Task ${task.id.slice(0, 8)} cancelled during generation`
+                        `[Stream] Task ${task.id.slice(0, 8)} cancelled during generation`,
                       );
                       updateTaskStatus(task.id, "CANCELLED");
                       await savePartial();
@@ -953,7 +1011,7 @@ export const Route = createFileRoute("/api/stream")({
                           route: routeResult.route,
                           text: cleanReply(fullText),
                           status: "CANCELLED",
-                        })
+                        }),
                       );
                       controller.close();
                       return;
@@ -980,7 +1038,7 @@ export const Route = createFileRoute("/api/stream")({
                       route: routeResult.route,
                       text: fullText,
                       status: "CANCELLED",
-                    })
+                    }),
                   );
                   controller.close();
                   return;
@@ -997,8 +1055,7 @@ export const Route = createFileRoute("/api/stream")({
                       };
                     }
                   ).parseMetadata(fullText);
-                  if (parsed.metadata)
-                    metadata = parsed.metadata as Record<string, unknown>;
+                  if (parsed.metadata) metadata = parsed.metadata as Record<string, unknown>;
                 }
 
                 updateTaskStatus(task.id, "COMPLETED");
@@ -1022,84 +1079,41 @@ export const Route = createFileRoute("/api/stream")({
                   result: unknown;
                 }> = [];
 
-                if (
-                  toolCalls &&
-                  Array.isArray(toolCalls) &&
-                  toolCalls.length > 0
-                ) {
+                if (toolCalls && Array.isArray(toolCalls) && toolCalls.length > 0) {
                   for (const tc of toolCalls) {
                     if (signal.aborted) break;
 
-                    const permCategory = toolPermissionCategory(tc.tool);
-                    const { allowed, permission } =
-                      checkPermission(permCategory);
+                    const auth = await authorizeToolCall({
+                      tool: tc.tool,
+                      args: tc.args,
+                      source: "tool",
+                      signal,
+                      emitConfirmRequest: (payload) => write(sseEvent("confirm_request", payload)),
+                    });
 
-                    if (!allowed) {
-                      const blockMsg = `Tool blocked by security policy: ${tc.tool} (tier: ${permission})`;
-                      console.warn(
-                        `[Tool] BLOCKED: ${tc.tool} — ${permission} tier`
-                      );
-                      toolResults.push({
-                        tool: tc.tool,
-                        result: { error: blockMsg, blocked: true },
-                      });
+                    if (!auth.ok) {
+                      console.warn(`[Tool] ${auth.reason.toUpperCase()}: ${tc.tool}`);
+                      const isBlocked = auth.reason === "never";
+                      const resultPayload = isBlocked
+                        ? { error: auth.message, blocked: true }
+                        : { error: auth.message, denied: true };
+                      toolResults.push({ tool: tc.tool, result: resultPayload });
                       write(
                         sseEvent("tool_result", {
                           tool: tc.tool,
-                          result: { error: blockMsg, blocked: true },
-                        })
+                          result: resultPayload,
+                        }),
                       );
                       logActivity({
                         toolName: tc.tool,
                         input: tc.args,
-                        result: { error: blockMsg },
-                        approvalStatus: "blocked",
+                        result: resultPayload,
+                        approvalStatus: isBlocked ? "blocked" : auth.reason,
                       }).catch(() => {});
                       continue;
                     }
 
-                    if (permission === "confirm") {
-                      console.log(
-                        `[Tool] CONFIRM tier: ${tc.tool} — requesting approval`
-                      );
-                      const confirmId = crypto.randomUUID().slice(0, 8);
-                      write(
-                        sseEvent("confirm_request", {
-                          tool: tc.tool,
-                          args: tc.args,
-                          confirmId,
-                        })
-                      );
-
-                      const decision = await registerConfirmation({
-                        tool: tc.tool,
-                        args: tc.args,
-                        confirmId,
-                      });
-                      if (decision !== "approved") {
-                        const denyMsg =
-                          decision === "expired"
-                            ? `Confirmation timed out after 3 minutes: ${tc.tool} — nothing was executed. Ask me again to retry.`
-                            : `Action denied by user: ${tc.tool}`;
-                        console.log(`[Tool] ${decision.toUpperCase()}: ${tc.tool}`);
-                        toolResults.push({
-                          tool: tc.tool,
-                          result: { error: denyMsg, denied: true },
-                        });
-                        write(
-                          sseEvent("tool_result", {
-                            tool: tc.tool,
-                            result: { error: denyMsg, denied: true },
-                          })
-                        );
-                        logActivity({
-                          toolName: tc.tool,
-                          input: tc.args,
-                          result: { error: denyMsg },
-                          approvalStatus: decision,
-                        }).catch(() => {});
-                        continue;
-                      }
+                    if (auth.tier === "confirm") {
                       logActivity({
                         toolName: tc.tool,
                         input: tc.args,
@@ -1111,7 +1125,7 @@ export const Route = createFileRoute("/api/stream")({
                     try {
                       console.log(
                         `[Tool] Executing: ${tc.tool}`,
-                        JSON.stringify(tc.args).slice(0, 200)
+                        JSON.stringify(tc.args).slice(0, 200),
                       );
                       write(sseEvent("tool_start", { tool: tc.tool }));
 
@@ -1119,29 +1133,24 @@ export const Route = createFileRoute("/api/stream")({
                         tc.tool,
                         // Bind the current session so the proactive message
                         // lands in this conversation's history
-                        tc.tool === "schedule_reminder" &&
-                          !tc.args["sessionId"]
+                        tc.tool === "schedule_reminder" && !tc.args["sessionId"]
                           ? { ...tc.args, sessionId }
                           : tc.args,
-                        signal
+                        signal,
+                        auth.approval,
                       );
                       toolResults.push({ tool: tc.tool, result });
 
                       console.log(`[Tool] ${tc.tool} → success`);
-                      write(
-                        sseEvent("tool_result", { tool: tc.tool, result })
-                      );
+                      write(sseEvent("tool_result", { tool: tc.tool, result }));
                       logActivity({
                         toolName: tc.tool,
                         input: tc.args,
                         result: result as Record<string, unknown>,
-                        approvalStatus: permission,
+                        approvalStatus: auth.tier,
                       }).catch(() => {});
                     } catch (toolErr) {
-                      const errMsg =
-                        toolErr instanceof Error
-                          ? toolErr.message
-                          : String(toolErr);
+                      const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr);
                       console.error(`[Tool] ${tc.tool} FAILED:`, errMsg);
                       toolResults.push({
                         tool: tc.tool,
@@ -1151,7 +1160,7 @@ export const Route = createFileRoute("/api/stream")({
                         sseEvent("tool_result", {
                           tool: tc.tool,
                           result: { error: errMsg },
-                        })
+                        }),
                       );
                       logActivity({
                         toolName: tc.tool,
@@ -1174,13 +1183,10 @@ export const Route = createFileRoute("/api/stream")({
                       // Stored clean: history feeds back into the next turn's
                       // prompt and the UI transcript, never machine metadata.
                       content: cleanReply(fullText),
-                    })
+                    }),
                   ).then((r) => {
                     if (r.error) {
-                      console.error(
-                        "[DB] messages (assistant) FAILED:",
-                        r.error.message
-                      );
+                      console.error("[DB] messages (assistant) FAILED:", r.error.message);
                       invalidateHistory(sessionId);
                     } else {
                       appendHistory(sessionId, {
@@ -1189,7 +1195,7 @@ export const Route = createFileRoute("/api/stream")({
                       });
                       console.log("[DB] messages (assistant) OK");
                     }
-                  })
+                  }),
                 );
 
                 writes.push(
@@ -1208,9 +1214,7 @@ export const Route = createFileRoute("/api/stream")({
                     },
                   })
                     .then(() => console.log("[DB] activity_log OK"))
-                    .catch((e: unknown) =>
-                      console.error("[DB] activity_log FAILED:", e)
-                    )
+                    .catch((e: unknown) => console.error("[DB] activity_log FAILED:", e)),
                 );
 
                 const meta = metadata as
@@ -1228,26 +1232,18 @@ export const Route = createFileRoute("/api/stream")({
                       supabaseAdmin.from("learned_behaviors").insert({
                         behavior: meta.correction.behavior,
                         source: "user_correction",
-                      })
+                      }),
                     ).then((r) => {
-                      if (r.error)
-                        console.error(
-                          "[DB] learned_behaviors FAILED:",
-                          r.error.message
-                        );
+                      if (r.error) console.error("[DB] learned_behaviors FAILED:", r.error.message);
                       else {
                         invalidateBehaviors();
                         console.log("[DB] learned_behaviors OK");
                       }
-                    })
+                    }),
                   );
                 }
 
-                if (
-                  meta?.memory &&
-                  Array.isArray(meta.memory) &&
-                  meta.memory.length > 0
-                ) {
+                if (meta?.memory && Array.isArray(meta.memory) && meta.memory.length > 0) {
                   for (const mem of meta.memory) {
                     if (!mem.fact) continue;
                     const memKeywords = extractKeywords(mem.fact);
@@ -1258,21 +1254,14 @@ export const Route = createFileRoute("/api/stream")({
                           category: mem.category ?? "general",
                           relevance_keywords: memKeywords,
                           last_accessed: new Date().toISOString(),
-                        })
+                        }),
                       ).then((r) => {
-                        if (r.error)
-                          console.error(
-                            "[DB] memory FAILED:",
-                            r.error.message
-                          );
+                        if (r.error) console.error("[DB] memory FAILED:", r.error.message);
                         else {
                           invalidateMemories();
-                          console.log(
-                            "[DB] memory OK:",
-                            mem.fact?.substring(0, 50)
-                          );
+                          console.log("[DB] memory OK:", mem.fact?.substring(0, 50));
                         }
-                      })
+                      }),
                     );
                   }
                 }
@@ -1288,7 +1277,7 @@ export const Route = createFileRoute("/api/stream")({
                     route: routeResult.route,
                     text: cleanReply(fullText),
                     toolResults,
-                  })
+                  }),
                 );
 
                 // Update memory access timestamps
@@ -1299,15 +1288,14 @@ export const Route = createFileRoute("/api/stream")({
                       .update({ last_accessed: new Date().toISOString() })
                       .in(
                         "id",
-                        relevantMemories.map((m) => m.id)
-                      )
+                        relevantMemories.map((m) => m.id),
+                      ),
                   )
                     .then(() => {})
                     .catch(() => {});
                 }
               } catch (err) {
-                const errorMsg =
-                  err instanceof Error ? err.message : "Unknown error";
+                const errorMsg = err instanceof Error ? err.message : "Unknown error";
                 console.error("[Stream] Error:", errorMsg);
                 write(sseEvent("error", { error: errorMsg }));
               } finally {

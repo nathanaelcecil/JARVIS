@@ -60,15 +60,10 @@ export async function scheduleReminder(params: {
     fireAt = new Date(Date.now() + params.delayMinutes * 60_000).toISOString();
   }
 
-  const recurring =
-    params.recurring && params.recurring.toLowerCase() === "daily"
-      ? "daily"
-      : null;
+  const recurring = params.recurring && params.recurring.toLowerCase() === "daily" ? "daily" : null;
 
   if (!fireAt && !recurring && params.kind !== "checkin") {
-    throw new Error(
-      "schedule_reminder: provide fireAt, delayMinutes, or recurring: \"daily\""
-    );
+    throw new Error('schedule_reminder: provide fireAt, delayMinutes, or recurring: "daily"');
   }
 
   const { data, error } = await supabaseAdmin
@@ -136,8 +131,7 @@ export async function setCheckinTime(params: {
     .from("proactive_schedules")
     .insert({
       kind: "checkin",
-      message:
-        "Good morning, sir. You're up and running — anything you'd like to start with?",
+      message: "Good morning, sir. You're up and running — anything you'd like to start with?",
       time_of_day: timeOfDay,
       recurring: "daily",
       status: "active",
@@ -197,8 +191,7 @@ export async function getDueSchedules(now: Date): Promise<ProactiveSchedule[]> {
       const [th, tm] = s.time_of_day.split(":").map(Number);
       const dueNow = h > (th ?? 9) || (h === (th ?? 9) && mi >= (tm ?? 0));
       const firedToday =
-        s.last_fired_at &&
-        new Date(s.last_fired_at).toDateString() === now.toDateString();
+        s.last_fired_at && new Date(s.last_fired_at).toDateString() === now.toDateString();
       return dueNow && !firedToday;
     }
     // reminder + task rows fire when fire_at passes
@@ -282,7 +275,7 @@ export async function getPendingMessages(): Promise<ProactiveMessage[]> {
     .update({ status: "delivered", delivered_at: new Date().toISOString() })
     .in(
       "id",
-      rows.map((r) => r.id)
+      rows.map((r) => r.id),
     );
   if (updErr) console.error("[Proactive] mark delivered failed:", updErr.message);
 

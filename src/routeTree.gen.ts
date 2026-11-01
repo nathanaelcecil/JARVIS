@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAgentRouteImport } from './routes/api/agent'
 import { Route as ApiConfirmRouteImport } from './routes/api/confirm'
 import { Route as ApiProactiveRouteImport } from './routes/api/proactive'
 import { Route as ApiStreamRouteImport } from './routes/api/stream'
@@ -20,6 +21,11 @@ import { Route as ApiAuthGoogleCallbackRouteImport } from './routes/api/auth/goo
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAgentRoute = ApiAgentRouteImport.update({
+  id: '/api/agent',
+  path: '/api/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiConfirmRoute = ApiConfirmRouteImport.update({
@@ -55,6 +61,7 @@ const ApiAuthGoogleCallbackRoute = ApiAuthGoogleCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/agent': typeof ApiAgentRoute
   '/api/confirm': typeof ApiConfirmRoute
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/agent': typeof ApiAgentRoute
   '/api/confirm': typeof ApiConfirmRoute
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/agent': typeof ApiAgentRoute
   '/api/confirm': typeof ApiConfirmRoute
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/agent'
     | '/api/confirm'
     | '/api/proactive'
     | '/api/stream'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/agent'
     | '/api/confirm'
     | '/api/proactive'
     | '/api/stream'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/api/agent'
     | '/api/confirm'
     | '/api/proactive'
     | '/api/stream'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAgentRoute: typeof ApiAgentRoute
   ApiConfirmRoute: typeof ApiConfirmRoute
   ApiProactiveRoute: typeof ApiProactiveRoute
   ApiStreamRoute: typeof ApiStreamRoute
@@ -127,6 +140,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/agent': {
+      id: '/api/agent'
+      path: '/api/agent'
+      fullPath: '/api/agent'
+      preLoaderRoute: typeof ApiAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/confirm': {
@@ -188,6 +208,7 @@ const ApiAuthGoogleRouteWithChildren = ApiAuthGoogleRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAgentRoute: ApiAgentRoute,
   ApiConfirmRoute: ApiConfirmRoute,
   ApiProactiveRoute: ApiProactiveRoute,
   ApiStreamRoute: ApiStreamRoute,

@@ -78,6 +78,21 @@ export async function runProactiveTick(): Promise<number> {
         );
       }
     }
+    // Automation (routines + watches) rides the same tick. It is file-backed,
+    // so it works with Supabase unconfigured, and it is contained: a failure
+    // there never blocks reminder delivery.
+    try {
+      const { runAutomationTick } = await import("../automation/tick");
+      const automation = await runAutomationTick(process.cwd(), now);
+      if (automation.routines > 0 || automation.watches > 0) {
+        console.log(
+          `[Automation] fired ${automation.routines} routine(s), ${automation.watches} watch(es)`
+        );
+      }
+    } catch (err) {
+      console.error("[Automation] tick failed:", err);
+    }
+
     return due.length;
   } finally {
     ticking = false;

@@ -2,24 +2,43 @@
  * Unit tests for guardrails.ts — permission logic
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { checkPermission, promoteTool, demoteTool, isTrusted, getTrustedTools } from "./guardrails";
+import {
+  activityLoggingConfigured,
+  checkPermission,
+  demoteTool,
+  getTrustedTools,
+  isTrusted,
+  promoteTool,
+} from "./guardrails";
 
 describe("checkPermission", () => {
   it("returns auto for read-only tools", () => {
-    expect(checkPermission("filesystem.list_directory")).toEqual({ allowed: true, permission: "auto" });
+    expect(checkPermission("filesystem.list_directory")).toEqual({
+      allowed: true,
+      permission: "auto",
+    });
     expect(checkPermission("system.get_battery")).toEqual({ allowed: true, permission: "auto" });
-    expect(checkPermission("desktop.list_running_apps")).toEqual({ allowed: true, permission: "auto" });
+    expect(checkPermission("desktop.list_running_apps")).toEqual({
+      allowed: true,
+      permission: "auto",
+    });
   });
 
   it("returns confirm for state-changing tools", () => {
     expect(checkPermission("desktop.open_app")).toEqual({ allowed: true, permission: "confirm" });
     expect(checkPermission("system.set_volume")).toEqual({ allowed: true, permission: "confirm" });
-    expect(checkPermission("terminal.run_command")).toEqual({ allowed: true, permission: "confirm" });
+    expect(checkPermission("terminal.run_command")).toEqual({
+      allowed: true,
+      permission: "confirm",
+    });
   });
 
   it("returns never for destructive tools", () => {
     expect(checkPermission("system.shutdown")).toEqual({ allowed: false, permission: "never" });
-    expect(checkPermission("system.factory_reset")).toEqual({ allowed: false, permission: "never" });
+    expect(checkPermission("system.factory_reset")).toEqual({
+      allowed: false,
+      permission: "never",
+    });
   });
 
   it("defaults to confirm for unknown tools", () => {
@@ -56,5 +75,19 @@ describe("trust promotion", () => {
   it("returns true for already-auto tools on promotion", () => {
     const result = promoteTool("system.get_battery");
     expect(result).toBe(true);
+  });
+});
+
+describe("activity logging configuration", () => {
+  it("is disabled unless both Supabase server credentials are present", () => {
+    expect(activityLoggingConfigured({})).toBe(false);
+    expect(activityLoggingConfigured({ VITE_SUPABASE_URL: "https://x.supabase.co" })).toBe(false);
+    expect(activityLoggingConfigured({ SUPABASE_SERVICE_ROLE_KEY: "service-role" })).toBe(false);
+    expect(
+      activityLoggingConfigured({
+        VITE_SUPABASE_URL: "https://x.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      }),
+    ).toBe(true);
   });
 });

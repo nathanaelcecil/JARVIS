@@ -23,8 +23,7 @@ function mockFetch(responses: Array<unknown>) {
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const next = responses.shift();
-      const isWrapped =
-        next !== null && typeof next === "object" && "__status" in (next as object);
+      const isWrapped = next !== null && typeof next === "object" && "__status" in (next as object);
       const body = isWrapped ? (next as MockResp).__body : next;
       const status = isWrapped ? (next as MockResp).__status : 200;
       calls.push({
@@ -38,7 +37,7 @@ function mockFetch(responses: Array<unknown>) {
         json: async () => body,
         text: async () => JSON.stringify(body ?? null),
       } as Response;
-    })
+    }),
   );
   return calls;
 }
@@ -85,7 +84,7 @@ describe("calendar writes", () => {
     expect(body.end.timeZone).toBe("Asia/Kolkata");
     expect(body.location).toBe("Office");
     expect(new Date(body.end.dateTime).getTime() - new Date(body.start.dateTime).getTime()).toBe(
-      30 * 60 * 1000
+      30 * 60 * 1000,
     );
   });
 
@@ -93,11 +92,9 @@ describe("calendar writes", () => {
     const calls = mockFetch([]);
     const { calendarCreateEvent } = await import("../../functions/google-calendar");
     await expect(
-      calendarCreateEvent({ summary: "", start: "2026-10-11T16:00:00Z" })
+      calendarCreateEvent({ summary: "", start: "2026-10-11T16:00:00Z" }),
     ).rejects.toThrow(/summary/);
-    await expect(
-      calendarCreateEvent({ summary: "x", start: "" })
-    ).rejects.toThrow(/start/);
+    await expect(calendarCreateEvent({ summary: "x", start: "" })).rejects.toThrow(/start/);
     expect(calls).toHaveLength(0);
   });
 
@@ -160,7 +157,7 @@ describe("gmail writes", () => {
     const calls = mockFetch([]);
     const { gmailSendEmail } = await import("../../functions/gmail");
     await expect(gmailSendEmail({ to: "  ", subject: "s", body: "b" })).rejects.toThrow(
-      /recipient/
+      /recipient/,
     );
     expect(calls).toHaveLength(0);
   });
@@ -169,11 +166,11 @@ describe("gmail writes", () => {
     const calls = mockFetch([]);
     const { gmailSendEmail, gmailForwardEmail } = await import("../../functions/gmail");
     await expect(gmailSendEmail({ to: "Alice", subject: "s", body: "b" })).rejects.toThrow(
-      /full address/
+      /full address/,
     );
-    await expect(
-      gmailForwardEmail({ messageId: "m0", to: "Bob Smith" })
-    ).rejects.toThrow(/full address/);
+    await expect(gmailForwardEmail({ messageId: "m0", to: "Bob Smith" })).rejects.toThrow(
+      /full address/,
+    );
     expect(calls).toHaveLength(0);
   });
 

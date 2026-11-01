@@ -4,13 +4,7 @@
  * Replaces the single global AbortController that existed before.
  */
 
-export type TaskStatus =
-  | "QUEUED"
-  | "RUNNING"
-  | "CANCELLING"
-  | "CANCELLED"
-  | "COMPLETED"
-  | "FAILED";
+export type TaskStatus = "QUEUED" | "RUNNING" | "CANCELLING" | "CANCELLED" | "COMPLETED" | "FAILED";
 
 export interface TaskEntry {
   id: string;
@@ -27,11 +21,7 @@ export interface TaskEntry {
 
 const tasks = new Map<string, TaskEntry>();
 
-export function registerTask(params: {
-  message: string;
-  route: string;
-  model: string;
-}): TaskEntry {
+export function registerTask(params: { message: string; route: string; model: string }): TaskEntry {
   const id = crypto.randomUUID();
   const entry: TaskEntry = {
     id,

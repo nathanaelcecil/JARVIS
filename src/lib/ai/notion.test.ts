@@ -20,8 +20,7 @@ describe("notionCreatePage", () => {
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, ...(init?.body ? { body: JSON.parse(init.body as string) } : {}) });
         const next = responses.shift();
-        const wrapped =
-          next !== null && typeof next === "object" && "__status" in (next as object);
+        const wrapped = next !== null && typeof next === "object" && "__status" in (next as object);
         const body = wrapped ? (next as { __body: unknown }).__body : next;
         const status = wrapped ? (next as { __status: number }).__status : 200;
         return {
@@ -30,7 +29,7 @@ describe("notionCreatePage", () => {
           json: async () => body,
           text: async () => JSON.stringify(body ?? null),
         } as Response;
-      })
+      }),
     );
     return calls;
   }
@@ -43,15 +42,26 @@ describe("notionCreatePage", () => {
       content: "# Goals\n- one\nplain line",
       parentPageId: PAGE_UUID,
     });
-    expect(res).toEqual({ id: "new-id", url: "https://notion.so/new", created: true, title: "Plan" });
+    expect(res).toEqual({
+      id: "new-id",
+      url: "https://notion.so/new",
+      created: true,
+      title: "Plan",
+    });
     const body = calls[0]!.body as {
       parent: unknown;
       properties: unknown;
       children: Array<{ type: string }>;
     };
     expect(body.parent).toEqual({ page_id: PAGE_UUID });
-    expect(body.properties).toEqual({ title: { title: [{ type: "text", text: { content: "Plan" } }] } });
-    expect(body.children.map((b) => b.type)).toEqual(["heading_1", "bulleted_list_item", "paragraph"]);
+    expect(body.properties).toEqual({
+      title: { title: [{ type: "text", text: { content: "Plan" } }] },
+    });
+    expect(body.children.map((b) => b.type)).toEqual([
+      "heading_1",
+      "bulleted_list_item",
+      "paragraph",
+    ]);
   });
 
   it("finds the title column of a database", async () => {
@@ -81,7 +91,9 @@ describe("notionCreatePage", () => {
     await expect(notionCreatePage({ title: "T" })).rejects.toThrow(/No Notion parent/);
 
     mockFetch([{ object: "error", message: "nope" }]);
-    await expect(notionCreatePage({ title: "T", parentPageId: PAGE_UUID })).rejects.toThrow(/did not confirm/);
+    await expect(notionCreatePage({ title: "T", parentPageId: PAGE_UUID })).rejects.toThrow(
+      /did not confirm/,
+    );
   });
 
   it("resolves a database title to its id before creating", async () => {
@@ -130,7 +142,7 @@ describe("notionAppendBlocks", () => {
       vi.fn(async (url: string, init?: RequestInit) => {
         calls.push({ url, ...(init?.body ? { body: JSON.parse(init.body as string) } : {}) });
         return { ok: true, status: 200, json: async () => responses.shift() } as Response;
-      })
+      }),
     );
     return calls;
   }
@@ -176,8 +188,8 @@ describe("notionAppendBlocks", () => {
   it("fails loudly when the page title matches nothing", async () => {
     mockFetch([{ results: [] }]);
     const { notionAppendBlocks } = await import("../../functions/notion");
-    await expect(
-      notionAppendBlocks({ pageId: "NO SUCH PAGE", content: "x" })
-    ).rejects.toThrow(/No Notion page found/);
+    await expect(notionAppendBlocks({ pageId: "NO SUCH PAGE", content: "x" })).rejects.toThrow(
+      /No Notion page found/,
+    );
   });
 });

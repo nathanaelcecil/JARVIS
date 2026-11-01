@@ -1,231 +1,455 @@
-# JARVIS Amber-Core — Setup Guide
+# JARVIS — Setup Guide
 
-> Zero command-line experience required. Every step is click-by-click.
+> Written for a fresh Mac. The app works without Supabase or voice; those add
+> persistence and speech.
 
-> **Python version matters:** The voice engine (XTTS-v2) requires **Python 3.10, 3.11, or 3.12**.
-> Python 3.13+ does not yet have compatible PyTorch wheels for Apple Silicon.
-> The startup script will detect this automatically, but if you only have Python 3.13+
-> installed, download Python 3.12 from [python.org](https://www.python.org/downloads/) first.
+## What you are setting up
 
----
-
-## What You're Building
-
-A personal AI assistant with:
-- A stunning visual core (the amber orb you already have)
-- Text chat powered by GLM (Z.ai's AI)
-- Voice cloning via XTTS-v2 (runs locally on your Mac)
-- Camera support for image analysis
-- Memory that compounds over time
-- Pluggable tool system (MCP)
+- A React/TanStack Start app at **http://localhost:3000**
+- **Ollama** running a local model (default `qwen2.5:14b`)
+- **XTTS-v2** voice server on `127.0.0.1:8080` (optional)
+- **Local tool agent** on `127.0.0.1:3008` for filesystem/desktop/system actions
+- Optional **Supabase** for history, memory, schedules and Google/Notion tokens
+- Optional **VS Code extension** for the coding agent
 
 ---
 
-## Step 1: Get a Z.ai API Key
+## Step 1: Install the runtimes
 
-1. Open your browser and go to **https://open.bigmodel.cn**
-2. Click **Sign Up** (top right) and create an account
-3. Once logged in, click **API Keys** in the left sidebar
-4. Click **Create API Key**
-5. Give it a name like `jarvis` and click **Create**
-6. **Copy the key** — it looks like a long string of letters and numbers
-7. Keep this page open — you'll need it in Step 3
+### Bun (required — starts the app and the local agent)
 
----
-
-## Step 2: Set Up Your Environment Variables
-
-1. In your project folder, find the file called **`.env.local`**
-2. Open it with any text editor (TextEdit, VS Code, etc.)
-3. You'll see several lines that need your actual values:
-
-```
-# === Supabase ===
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...your_anon_key_here
-SUPABASE_SERVICE_ROLE_KEY=eyJ...your_service_role_key_here
-
-# === Z.ai (GLM) ===
-ZAI_API_KEY=your_zai_api_key_here
-
-# === XTTS-v2 (local voice server) ===
-XTTS_URL=http://127.0.0.1:8080
-VOICE_SAMPLE_PATH=./voice_sample.wav
+```sh
+curl -fsSL https://bun.sh/install | bash
 ```
 
-4. Replace each placeholder with your actual values:
+Then open a new Terminal and check `bun --version`.
 
-**For Supabase** (you said you already have this):
-- Go to your Supabase dashboard: **https://supabase.com/dashboard**
-- Select your project
-- Click **Project Settings** (gear icon, bottom left)
-- Click **API** in the sidebar
-- Copy the **Project URL** → paste as `VITE_SUPABASE_URL`
-- Copy the **anon public** key → paste as `VITE_SUPABASE_ANON_KEY`
-- Copy the **service_role** key → paste as `SUPABASE_SERVICE_ROLE_KEY`
+### Node 20+ (required for tests/build tooling)
 
-**For Z.ai**:
-- Paste the API key you created in Step 1 → `ZAI_API_KEY`
+Download from <https://nodejs.org> if `node --version` is older than 20.
 
-5. Save the file
+### Ollama (required for the model)
+
+1. Install from <https://ollama.com>.
+2. Pull the default model:
+
+```sh
+ollama pull qwen2.5:14b
+```
+
+3. Leave `ollama serve` running (the macOS app does this for you).
+
+Optional: use a stronger coding model without code edits:
+
+```sh
+ollama pull qwen2.5-coder:32b
+export OLLAMA_CODING_MODEL=qwen2.5-coder:32b
+```
+
+### Python 3.10–3.12 + FFmpeg (required for voice only)
+
+XTTS-v2 needs PyTorch wheels that do not exist for Python 3.13+ on Apple
+Silicon. `start-jarvis.command` finds `python3.12`, `python3.11` or `python3.10`
+automatically.
+
+```sh
+brew install ffmpeg
+```
+
+### whisper.cpp (required for microphone input)
+
+```sh
+brew install whisper-cpp
+mkdir -p models
+curl -L -o models/ggml-small.en.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin
+```
+
+Override paths with `WHISPER_BIN` / `WHISPER_MODEL` if needed.
 
 ---
 
-## Step 3: Create the Database Tables
+## Step 2: Configure environment variables
 
-1. Go to your Supabase dashboard
-2. Click **SQL Editor** in the left sidebar
-3. Click **New query**
-4. Open the file `supabase/migrations/001_initial_schema.sql` in your project folder
-5. Select all the text in that file and copy it
-6. Paste it into the SQL Editor in Supabase
-7. Click **Run** (bottom right, green button)
-8. You should see "Success. No rows returned" — the tables are created
+```sh
+cp .env.local.template .env.local
+```
+
+Open `.env.local` and fill in only what you use. The app starts with an empty
+file; Supabase-dependent features report a clear error instead of crashing.
+
+### Supabase (optional)
+
+1. Create a project at <https://supabase.com>.
+2. Project Settings → API: copy the URL, anon key, and service-role key.
+3. Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
+4. In Supabase → SQL Editor, run these files **in order**:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_google_tokens.sql`
+   - `supabase/migrations/003_proactive.sql`
+
+The tables are `messages`, `memory`, `learned_behaviors`, `activity_log`,
+`google_tokens`, `proactive_schedules`, `proactive_messages`.
+
+### Google OAuth (optional — Gmail + Calendar)
+
+1. In Google Cloud Console create an OAuth client of type **Web application**.
+2. Add redirect URI: `http://localhost:3000/api/auth/google/callback`.
+3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
+4. Start JARVIS and visit <http://localhost:3000/api/auth/google>.
+5. Re-visit that URL after this upgrade if Gmail send or Calendar writes ask
+   for scopes the old token lacks.
+
+### Notion (optional)
+
+Create an internal integration at <https://www.notion.so/my-integrations>,
+share the pages/databases with it, and set `NOTION_API_KEY`.
 
 ---
 
-## Step 4: Prepare a Voice Sample (Optional, for Voice Cloning)
+## Step 3: Voice sample (optional)
 
-To make JARVIS sound like a specific voice:
+1. Record 5–15 seconds of clear speech, no music.
+2. Convert to WAV if needed and save it as `voice_sample.wav` in the project
+   root.
+3. Without it, XTTS uses its default voice.
 
-1. Record a short audio clip (5-15 seconds) of someone speaking clearly
-   - Can be you, or anyone whose voice you want to clone
-   - Just speak naturally — no background music
-   - WAV format is best, but MP3 works too
-2. If it's not already a .wav file, convert it:
-   - Go to **https://audio.online-convert.com/convert-to-wav**
-   - Upload your file, click **Convert**, download the result
-3. Rename the converted file to **`voice_sample.wav`**
-4. Place it in your project folder (same folder as `start-jarvis.command`)
-5. If you skip this, JARVIS will use a default voice (still works, just not cloned)
+---
+
+## Step 4: Security keys, permissions and the screen helper
+
+### Keys JARVIS creates for you
+
+| File | Created by | Purpose |
+| --- | --- | --- |
+| `local-agent/.agent-secret` | first local-agent start (mode 0600) | bearer secret for `127.0.0.1:3008` |
+| `local-agent/.approval-key` | first local-agent start (mode 0600) | HMAC key that signs per-call approval tokens for confirm-tier tools |
+| `.jarvis/agent-token` | first `/api/agent` request | coding-agent control-plane token |
+
+Start the local agent once (`bun local-agent/server.ts`) to create the first
+two. All three are git-ignored — keep them out of anything you share.
+
+The bearer secret alone can never run a confirm-tier tool (open an app, write a
+file, run a command): the JARVIS server mints a short-lived approval token only
+after you approve, and the local agent verifies it before executing.
+
+### Rotation
+
+- **Approval key:** delete `local-agent/.approval-key` and restart the local
+  agent; the app must be restarted too so it re-reads the key. Every pending
+  approval becomes invalid and actions must be approved again.
+- **Bearer secret:** delete `local-agent/.agent-secret` and restart the agent.
+  The app reads the file per call, so it needs no restart.
+- **Coding-agent token:** delete `.jarvis/agent-token` and make one request to
+  `/api/agent` to regenerate; update the VS Code setting if you pinned it.
+- **Google tokens:** set `TOKEN_ENCRYPTION_KEY` (32 bytes, base64 or hex)
+  BEFORE connecting Google — without it the integration stays disabled rather
+  than storing plaintext. To rotate: move the current value to
+  `TOKEN_ENCRYPTION_KEY_PREVIOUS`, set a new key, and let rows re-encrypt as
+  they are read.
+
+### Allowed origins
+
+Local `/api/*` routes accept only loopback `Host`/`Origin` values, and the
+local agent echoes CORS only for loopback origins. Set
+`JARVIS_ALLOWED_ORIGINS` (comma-separated exact origins) only if you
+deliberately serve the UI from somewhere else. Never expose ports 3000 or 3008
+beyond your machine.
+
+### Screen reading and computer control (Hands): build + two permissions
+
+Hands is **two binaries on purpose**. macOS grants Accessibility per binary, so
+reading and acting are separate permissions you can revoke independently.
+
+```sh
+./native/jarvis-hands/build.command                    # observation helper
+./native/jarvis-hands-control/build.command            # control helper
+./native/jarvis-hands/bin/jarvis-hands permissions     # observation grant?
+./native/jarvis-hands-control/bin/jarvis-hands-control permissions  # control grant?
+```
+
+`native/build-all.command` builds both.
+
+**`jarvis-hands` — observation only.** Lists windows, reads a window's
+accessibility text, OCRs a screenshot when the window has no accessible text,
+and can capture a PNG. It contains no click, type, key-press, drag, scroll or
+menu code at all — a test fails the build if one appears.
+
+**`jarvis-hands-control` — acting only.** Click (by label or coordinates),
+type, press keys, scroll, drag, walk menus, move/resize windows, raise a window.
+Every one of its tools is **confirm tier**: JARVIS shows you exactly what it will
+do and waits for approval, and the local agent refuses the call without an
+approval token — the bearer secret alone cannot click.
+
+**Grant permissions:** System Settings → Privacy & Security →
+
+1. **Accessibility** → enable `jarvis-hands` (reading window text).
+2. **Accessibility** → enable `jarvis-hands-control` (only if you want it to
+   click/type — skip it and JARVIS simply cannot act).
+3. **Screen Recording** → enable the process that runs JARVIS. This is what the
+   OCR fallback and `hands_look` need; the full-screen capture is attributed to
+   the parent app, not to the helper.
+
+Without (1) the `hands_*` tools return `accessibility_denied`; without (2) every
+`control_*` action returns `accessibility_denied`; without (3) `hands_look`
+returns `screen_recording_denied` and OCR falls back to reporting that the
+window has no readable text. JARVIS says which one is missing rather than
+guessing.
+
+Set `JARVIS_HANDS_BIN` / `JARVIS_HANDS_CONTROL_BIN` only to point at helpers
+built somewhere else.
+
+### Routines and watches
+
+Routines and watches need no setup beyond the app running: they live in
+`.jarvis/routines.json` and `.jarvis/watches.json`, which are created on first
+use and are git-ignored. Supabase is not required.
+
+Say what you want in plain words — "every weekday at 8, summarise my inbox" or
+"tell me when the Xcode build window appears". Accepted schedules are:
+`every N minutes`, `every N hours`, `every hour`, `every day at HH:MM`,
+`every weekday at HH:MM`, and `every <weekday> at HH:MM` (with `am`/`pm`
+allowed). Anything else is refused rather than stored with a guessed schedule.
+
+A routine fires on the same 15-second tick as reminders; its prompt then runs
+as your own request (never while another answer is streaming). A watch fires a
+banner when the window appears, goes away or has settled — or when a shell test
+starts passing — and uses no model while it waits. Screenshots live in a private `0700` temp directory
+(`JARVIS_HANDS_LOOK_DIR` to relocate) and are pruned after 10 minutes.
+
+### Menu-bar app (optional — dictation, wake word, drawing)
+
+`native/jarvis-menubar` is a small accessory app: no Dock icon, one menu-bar
+item. Build and launch it once:
+
+```bash
+./native/jarvis-menubar/build.command
+open native/jarvis-menubar/bin/JARVISMenuBar.app
+```
+
+It gives you:
+
+| Item | What it does |
+| --- | --- |
+| Open JARVIS | Opens the web UI |
+| Dictate… (⌃⌥D) | Records, transcribes through `/api/transcribe` (local whisper.cpp), then **types the text into the frontmost app** |
+| Wake word “Jarvis” | On-device speech recognition while idle; saying the word starts a dictation |
+| Draw on screen | Transparent overlay on every display — drag to draw an arrow; Esc clears, then closes |
+| Record meeting… | Records the mic and saves `<timestamp>.m4a` plus a `.md` transcript in `~/Documents/JARVIS/meetings` |
+
+First use asks for Microphone and Speech Recognition. Dictation types through
+`jarvis-hands-control`, so Accessibility must be granted for that helper (see
+above); if it is not, the text goes to the clipboard and the app says so.
+
+The app posts to whatever `JARVIS_APP_ORIGIN` says, default
+`http://127.0.0.1:4173` — launch the dev server on that port if you want
+dictation, or export the variable before `open`:
+
+```bash
+JARVIS_APP_ORIGIN=http://127.0.0.1:3000 open native/jarvis-menubar/bin/JARVISMenuBar.app
+```
 
 ---
 
 ## Step 5: Start JARVIS
 
-1. Open Finder and navigate to your project folder
-2. Find the file called **`start-jarvis.command`**
-3. **Double-click it**
-4. A Terminal window will open and show startup messages
-5. Wait for it to say "JARVIS is running!" (takes 30-60 seconds on first run while the voice model downloads)
-6. Your browser should open to **http://localhost:3000**
+### One-click
 
-**That's it!** You should see the amber orb with the chat input at the bottom.
+Double-click **`start-jarvis.command`** in Finder. It:
+
+1. Checks `.env.local`, Bun, FFmpeg and a compatible Python
+2. Creates/reuses `.xtts-venv` and installs PyTorch, coqui-tts and Flask
+3. Starts the local tool agent (`bun local-agent/server.ts`)
+4. Starts the XTTS server (`python xtts_server.py`) and waits for `/health`
+5. Runs `bun run dev` and opens <http://localhost:3000>
+
+First run installs several GB of Python packages and downloads the XTTS model.
+
+### Manual (no voice)
+
+```sh
+bun install
+bun local-agent/server.ts &     # optional, for macOS tools
+bun run dev
+```
+
+Press `Ctrl+C` to stop. The one-click script stops the child processes for you.
 
 ---
 
-## Step 6: Test the Round-Trip
+## Step 6: Verify
 
-1. **Type a message** in the chat box (e.g., "Hello, JARVIS")
-2. Press **Enter** or click the send button
-3. Watch the orb change to **THINKING** state (amber flares up)
-4. Wait for the response text to appear
-5. The orb changes to **SPEAKING** as the audio plays back
-6. After playback, it returns to **IDLE**
+1. Type “Hello, JARVIS”. The core changes `thinking` → `speaking` and the reply
+   is revealed in sync with audio.
+2. Click the mic and speak. `/api/transcribe` should return text.
+3. Ask “what's my battery?” — the local agent should answer with a real value.
+4. Ask a code question with the VS Code extension open (see below).
 
-If you see an error about the Z.ai API key, double-check your `.env.local`.
-If you see a Supabase error, make sure you ran the migration SQL in Step 3.
+### VS Code extension (optional)
 
----
+```sh
+cd vscode-extension
+npm install
+npm run compile
+npm run package
+code --install-extension jarvis-coding-agent-0.1.0.vsix
+```
 
-## Stopping JARVIS
-
-- Click the Terminal window that's running
-- Press **Control + C** to stop everything
+Start the app, open this repo as the workspace folder, then run
+`JARVIS: New Task`. The backend creates `.jarvis/agent-token` on the first
+`/api/agent` request; no token is stored in settings.
 
 ---
 
 ## Troubleshooting
 
-**"Command not found: bun"**
-- You need Bun installed. Go to **https://bun.sh** and click the install button, or run `curl -fsSL https://bun.sh/install | bash` in Terminal.
+**“Bun is not installed”**
+Install from <https://bun.sh> and open a new Terminal.
 
-**"Command not found: python3"**
-- macOS should have Python 3 built in. If not, go to **https://www.python.org/downloads/** and install it.
+**Ollama unreachable**
+Run `ollama serve` and check `curl http://localhost:11434/api/tags`. The app
+defaults to `qwen2.5:14b`; pull it or set `OLLAMA_*_MODEL`.
 
-**"No compatible Python found" / Python 3.13+ error**
-- PyTorch doesn't have wheels for Python 3.13+ on Apple Silicon yet.
-- Install Python 3.12: go to **https://www.python.org/downloads/** → download the macOS installer for 3.12 → run it → double-click start-jarvis.command again.
-- The startup script checks for `python3.12`, `python3.11`, `python3.10` automatically.
+**“Supabase is not configured — persistence is disabled”**
+Expected on first use when Supabase is not configured (the warning is logged
+once). Chat and streaming keep working; reads return empty results and writes
+report `supabase_not_configured`. History, memory, schedules and Google/Notion
+token storage need credentials — see above.
 
-**"PyTorch install failed" / "No matching distribution found for torch"**
-- Your Python version is likely too new (3.13 or 3.14). See the note above.
-- Also check: Xcode Command Line Tools (`xcode-select --install`).
+**JARVIS says it cannot read the screen / `accessibility_denied`**
+The helper is built but macOS has not granted Accessibility. Run
+`./native/jarvis-hands/bin/jarvis-hands permissions`, then System Settings →
+Privacy & Security → Accessibility → enable `jarvis-hands`. If READING works
+but ACTING refuses, the grant for `jarvis-hands-control` is the missing one —
+check it with `./native/jarvis-hands-control/bin/jarvis-hands-control permissions`.
 
-**Voice install fails / "TTS library not installed"**
-- The voice package is **`coqui-tts`** (the old `TTS` package was abandoned).
-- The startup script installs PyTorch, coqui-tts, and flask in separate steps so you can see exactly which one failed.
-- Common fix: make sure Xcode Command Line Tools are installed: `xcode-select --install`
+**`screen_recording_denied`**
+Screen Recording is not granted to the app running JARVIS, so the OCR fallback
+and `hands_look` cannot capture. Grant it in System Settings → Privacy &
+Security → Screen Recording, then restart the app that launches JARVIS.
 
-**Voice server is slow / takes 5+ seconds**
-- This is normal on Apple Silicon (M4 Pro, no GPU). The XTTS model runs on CPU. First request is slowest; subsequent ones are 2-5 seconds. Not a bug.
+**A control action was refused with `ambiguous`**
+Several controls matched the label JARVIS used. That is deliberate: it will not
+guess which button you meant. Ask it to use one of the candidates, or give it a
+more specific label.
+
+**`helper_missing`**
+Build it: `./native/jarvis-hands/build.command` and/or
+`./native/jarvis-hands-control/build.command` (needs the Xcode Command Line
+Tools). JARVIS will say the helper is missing rather than pretend it read the
+screen or clicked.
+
+**Confirm-tier tool refuses to run (“approval key not configured”)**
+Start the local agent once so `local-agent/.approval-key` exists, then restart
+the app. Nothing in that tier runs on the bearer secret alone — that is
+deliberate.
+
+**Voice server is slow (2–5 s)**
+Normal on Apple Silicon CPU. First request is slowest. Check `curl
+http://127.0.0.1:8080/health`.
+
+**PyTorch install failed**
+Your Python is probably 3.13+. Install 3.12 from <https://www.python.org> and
+rerun `start-jarvis.command`.
+
+**coqui-tts import failed**
+```sh
+source .xtts-venv/bin/activate
+pip install --force-reinstall "coqui-tts[codec]" "transformers>=4.57,<5.1"
+```
+
+**Mic says “network error”**
+The old Web Speech API is gone; JARVIS uses local whisper.cpp. Check
+`WHISPER_BIN`, `WHISPER_MODEL`, and `ffmpeg -version`.
 
 **Camera not working**
-- Make sure you're using HTTPS or localhost (camera requires secure context)
-- Check System Preferences → Privacy & Security → Camera → allow your browser
+Camera access requires `localhost` or HTTPS. Allow Camera for your browser in
+System Settings → Privacy & Security.
+
+**Coding agent returns 401**
+Bootstrap once: `curl -i http://127.0.0.1:3000/api/agent` (a 401 reply still
+creates `.jarvis/agent-token`). Ensure `.jarvis/` is never committed.
 
 ---
 
-## Pushing Changes to GitHub
+## Environment variable reference
 
-Once you have a working version and want to save it:
-
-1. Open the project folder
-2. The project is connected to Lovable — any changes you make will sync
-3. To push manually via Freebuff Web:
-   - Use the Git integration in Freebuff to commit and push your changes
-   - Your code will be saved to your connected GitHub repository
+| Variable | Purpose | Browser-safe? |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | Supabase project URL | Yes |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key | Yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server DB access | **No** |
+| `OLLAMA_BASE_URL` | Ollama OpenAI-compatible endpoint | No |
+| `OLLAMA_KEEP_ALIVE` | Keep model loaded (`-1`) | No |
+| `OLLAMA_*_MODEL` | Per-route model overrides | No |
+| `XTTS_URL` | Local voice server | No |
+| `VOICE_SAMPLE_PATH` | Reference voice WAV | No |
+| `WHISPER_BIN` / `WHISPER_MODEL` | Local STT | No |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth | **No** |
+| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for stored Google tokens (required for Google) | **No** |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | Old key, accepted for re-encryption on rotation | **No** |
+| `JARVIS_APPROVAL_KEY_FILE` | Override the approval-key path | **No** |
+| `JARVIS_ALLOWED_ORIGINS` | Extra exact origins allowed to call local routes | No |
+| `JARVIS_HANDS_BIN` | Override the read-only screen helper path | No |
+| `NOTION_API_KEY` | Notion integration | **No** |
+| `LOCAL_AGENT_PORT` | Tool agent port (default 3008) | No |
+| `JARVIS_AGENT_MAX_ITERATIONS` | Coding-agent iteration cap (3–40) | No |
+| `JARVIS_AGENT_TIMEOUT_MS` | Coding-agent deadline | No |
 
 ---
 
-## Environment Variables Reference
+## Development checks
 
-| Variable | Where to get it | Safe for browser? |
-|----------|----------------|-------------------|
-| `VITE_SUPABASE_URL` | Supabase Dashboard → Settings → API | ✅ Yes |
-| `VITE_SUPABASE_ANON_KEY` | Supabase Dashboard → Settings → API | ✅ Yes |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API | ❌ Server-only |
-| `ZAI_API_KEY` | open.bigmodel.cn → API Keys | ❌ Server-only |
-| `XTTS_URL` | Local (http://127.0.0.1:8080) | N/A |
-| `VOICE_SAMPLE_PATH` | Your project folder | N/A |
+```sh
+bun run typecheck
+bun run test
+bun run build
+python3 -m py_compile xtts_server.py
+```
+
+Extension:
+
+```sh
+cd vscode-extension
+npm run typecheck
+npm test
+```
+
+`npm run lint` (whole repo) is very slow on this machine; lint changed paths
+directly with `npx eslint <paths>`.
 
 ---
 
-## File Structure
+## File structure
 
 ```
-amber-core/
-├── src/
-│   ├── components/
-│   │   ├── JarvisCore.tsx      # The amber visual core
-│   │   ├── ChatInput.tsx       # Chat input with mic/camera
-│   │   ├── MessageList.tsx     # Message history
-│   │   ├── PatternProposal.tsx # Inferred pattern confirmation
-│   │   ├── StatusOverlay.tsx   # State indicator
-│   │   └── CameraPanel.tsx     # Webcam feed
-│   ├── lib/
-│   │   ├── ai/
-│   │   │   ├── provider.ts     # GLM abstraction layer
-│   │   │   └── system-prompt.ts # JARVIS personality
-│   │   ├── mcp/
-│   │   │   └── registry.ts     # MCP server registry
-│   │   ├── supabase-browser.ts # Browser Supabase client
-│   │   ├── supabase-server.ts  # Server-only Supabase client
-│   │   ├── supabase-types.ts   # TypeScript types for DB
-│   │   ├── guardrails.ts       # Permissions + kill switch
-│   │   └── jarvis-core.ts      # Visual engine
-│   ├── functions/
-│   │   ├── chat.ts             # Chat server function
-│   │   ├── speak.ts            # Voice server function
-│   │   └── kill.ts             # Kill switch endpoint
-│   └── routes/
-│       ├── index.tsx           # Main page
-│       └── __root.tsx          # Root layout
-├── supabase/
-│   └── migrations/
-│       └── 001_initial_schema.sql
-├── xtts_server.py              # XTTS-v2 Python server
-├── start-jarvis.command        # One-click startup
-├── .env.local                  # Your keys (don't share!)
-└── SETUP.md                    # This file
+src/
+  routes/
+    index.tsx              chat UI + SSE client + TTS/reveal
+    api/stream.ts          chat pipeline (tools, confirmations, memory)
+    api/agent.ts           coding-agent control plane (bearer token)
+    api/transcribe.ts      local whisper.cpp STT
+    api/proactive.ts       reminders/check-ins/task callbacks
+    api/confirm.ts         confirm-tier tool decisions
+    api/auth/google/       OAuth start + callback
+  components/              chat UI, amber core, camera, overlays
+  functions/               server functions: speak, Gmail, Google, Notion, tasks
+  lib/
+    ai/                    provider, router, prompts, data-tool pre-pass
+    agent/                 coding-agent engine, workspace, memory, task store
+    mcp/registry.ts        tool catalog + dispatch
+    audio-queue.ts         Web Audio scheduling + synchronized reveal
+    speech-text.ts         speech-safe chunking/normalization
+    reveal.ts              audio-clock → text-reveal math
+local-agent/               Bun macOS tool server (tools/, approval.ts, validate.ts)
+native/jarvis-hands/       read-only screen observation + OCR helper (Swift) + build
+native/jarvis-hands-control/ acting helper: click/type/keys/menu/windows (Swift) + build
+vscode-extension/          VS Code sidebar client
+xtts_server.py             XTTS-v2 voice server
+supabase/migrations/       database schema
+start-jarvis.command       one-click startup
 ```
+
+Architecture details and the Atticus integration boundary are in
+[ARCHITECTURE.md](ARCHITECTURE.md).

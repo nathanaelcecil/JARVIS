@@ -4,7 +4,7 @@ import { cancelTask as registryCancelTask, cancelAllTasks } from "../lib/ai/task
 
 export const killSwitch = createServerFn({ method: "POST" })
   .validator(
-    (data: unknown) => data as { action: "activate" | "reset" | "cancel"; taskId?: string }
+    (data: unknown) => data as { action: "activate" | "reset" | "cancel"; taskId?: string },
   )
   .handler(async ({ data }) => {
     if (data.action === "activate") {

@@ -4,10 +4,9 @@
  * approving Google consent in another tab.)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import {
-  registerConfirmation,
-  getPendingConfirmation,
-} from "./confirm";
+import { getPendingConfirmation, mintConfirmId, registerConfirmation } from "./confirm";
+
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 describe("registerConfirmation", () => {
   beforeEach(() => {
@@ -62,6 +61,20 @@ describe("registerConfirmation", () => {
     });
     getPendingConfirmation("no1")!.resolve("denied");
     expect(await denied).toBe("denied");
+  });
+
+  it("mints the full UUID, not an 8-character prefix", () => {
+    const id = mintConfirmId();
+    expect(id).toHaveLength(36);
+    expect(id).toMatch(UUID_V4);
+    // Truncation would make collisions plausible across a long session.
+    expect(id).not.toHaveLength(8);
+  });
+
+  it("accepts an id minted by mintConfirmId and exposes it unchanged", () => {
+    const id = mintConfirmId();
+    void registerConfirmation({ tool: "t", args: {}, confirmId: id });
+    expect(getPendingConfirmation(id)?.tool).toBe("t");
   });
 
   it("keeps tool and args visible for the UI while pending", () => {

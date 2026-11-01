@@ -11,11 +11,14 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { guardLocalRequest } from "../../lib/local-request-guard";
 
 export const Route = createFileRoute("/api/proactive")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        const blocked = guardLocalRequest(request);
+        if (blocked) return blocked;
         try {
           const { ensureProactiveScheduler, runProactiveTick } = await import(
             "../../lib/proactive/scheduler"
@@ -28,7 +31,19 @@ export const Route = createFileRoute("/api/proactive")({
             "../../functions/proactive"
           );
           const messages = await getPendingMessages();
-          return Response.json({ messages });
+
+          // Routine prompts are drained separately: they are requests to run,
+          // not messages JARVIS said. They are file-backed so they survive
+          // Supabase being unconfigured.
+          let routines: unknown[] = [];
+          try {
+            const { popOutbox } = await import("../../lib/automation/routines");
+            routines = await popOutbox(process.cwd());
+          } catch (err) {
+            console.error("[Proactive] routine outbox failed:", err);
+          }
+
+          return Response.json({ messages, routines });
         } catch (err) {
           console.error("[Proactive] poll failed:", err);
           return Response.json(
@@ -39,6 +54,10 @@ export const Route = createFileRoute("/api/proactive")({
       },
 
       POST: async ({ request }) => {
+        // Allows the local agent's server-to-server callback (no Origin, no
+        // Sec-Fetch-Site) while rejecting cross-site browser posts.
+        const blocked = guardLocalRequest(request);
+        if (blocked) return blocked;
         try {
           const body = await request.json();
           const { jobId, label, exitCode, summary } = body as {

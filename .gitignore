@@ -39,4 +39,27 @@ voice_sample.wav
 __pycache__/
 *.pyc
 local-agent/.agent-secret
+local-agent/.approval-key
 models/
+
+# JARVIS Hands: helper build output
+# (rebuild with native/jarvis-hands/build.command and
+#  native/jarvis-hands-control/build.command, or native/build-all.command)
+native/jarvis-hands/bin/
+native/jarvis-hands-control/bin/
+native/jarvis-menubar/bin/
+
+# JARVIS coding agent: token, task store, project memory (secrets live here)
+.jarvis/
+
+# VS Code extension build output
+vscode-extension/out/
+vscode-extension/node_modules/
+vscode-extension/*.vsix
+vscode-extension/.vscode-test/
+
+# Tooling caches / local state
+coverage/
+*.tsbuildinfo
+.eslintcache
+supabase/.temp/

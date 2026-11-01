@@ -18,6 +18,7 @@ import os
 import sys
 import io
 import json
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -32,6 +33,21 @@ VOICE_SAMPLE_PATH = os.environ.get("VOICE_SAMPLE_PATH", "./voice_sample.wav")
 
 # Global model reference
 tts_model = None
+
+# Whitelisted tuning parameters forwarded to tts_to_file(**kwargs).
+# Names verified against the installed coqui-tts Xtts.inference signature
+# (.xtts-venv): anything else in a request is ignored, never passed through.
+ALLOWED_PARAMS = {
+    "temperature",
+    "length_penalty",
+    "repetition_penalty",
+    "top_k",
+    "top_p",
+    "do_sample",
+    "num_beams",
+    "speed",
+    "split_sentences",
+}
 
 
 def load_model():
@@ -57,12 +73,20 @@ def load_model():
         return False
 
 
-def synthesize(text: str) -> bytes:
-    """Synthesize speech from text, optionally using a reference voice."""
+def synthesize(text: str, params: dict | None = None) -> bytes:
+    """Synthesize speech from text, optionally using a reference voice.
+
+    `params` is filtered through ALLOWED_PARAMS before being forwarded to
+    tts_to_file(**kwargs), so unknown/renamed keys can never reach the model.
+    """
     global tts_model
 
     if tts_model is None:
         raise RuntimeError("Model not loaded")
+
+    kwargs = {
+        k: v for k, v in (params or {}).items() if k in ALLOWED_PARAMS
+    }
 
     # Create an in-memory buffer for the WAV output
     wav_buffer = io.BytesIO()
@@ -70,12 +94,12 @@ def synthesize(text: str) -> bytes:
     # Check if reference voice exists
     voice_path = Path(VOICE_SAMPLE_PATH)
     if voice_path.exists():
-        print(f"[XTTS] Using reference voice: {voice_path}")
         tts_model.tts_to_file(
             text=text,
             file_path=wav_buffer,
             speaker_wav=str(voice_path),
             language="en",
+            **kwargs,
         )
     else:
         print("[XTTS] No reference voice found, using default voice.")
@@ -84,6 +108,7 @@ def synthesize(text: str) -> bytes:
             text=text,
             file_path=wav_buffer,
             language="en",
+            **kwargs,
         )
 
     wav_buffer.seek(0)
@@ -106,17 +131,26 @@ class SpeakHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Missing 'text' field")
                 return
 
-            print(f"[XTTS] Synthesizing: {text[:80]}{'...' if len(text) > 80 else ''}")
+            params = data.get("params") or {}
+            if not isinstance(params, dict):
+                params = {}
+            unknown = sorted(set(params) - ALLOWED_PARAMS)
 
-            audio_bytes = synthesize(text)
+            started = time.monotonic()
+            audio_bytes = synthesize(text, params)
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            # Latency only — never log message content.
+            print(
+                f"[XTTS] {len(text)} chars -> {len(audio_bytes)} bytes "
+                f"in {elapsed_ms}ms"
+                + (f" (ignored params: {', '.join(unknown)})" if unknown else "")
+            )
 
             self.send_response(200)
             self.send_header("Content-Type", "audio/wav")
             self.send_header("Content-Length", str(len(audio_bytes)))
             self.end_headers()
             self.wfile.write(audio_bytes)
-
-            print(f"[XTTS] Done. {len(audio_bytes)} bytes sent.")
 
         except Exception as e:
             print(f"[XTTS] Error: {e}")

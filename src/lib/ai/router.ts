@@ -18,18 +18,22 @@ export interface RouteResult {
   reason: string;
 }
 
-// Local Ollama backend (2026-09): every class runs qwen2.5:14b, except
-// VISION which uses a dedicated local vision model (env-overridable).
-const LOCAL_MODEL = "qwen2.5:14b";
+// Local Ollama backend (2026-09): every class runs qwen2.5:14b by default,
+// except VISION (dedicated local vision model). Every route is env-
+// overridable so stronger/faster models can be assigned per workload without
+// code edits (OLLAMA_FAST_MODEL, OLLAMA_SMART_MODEL, OLLAMA_RESEARCH_MODEL,
+// OLLAMA_CODING_MODEL, OLLAMA_AGENT_MODEL, OLLAMA_VISION_MODEL) — no
+// model-specific behavior is hardcoded in callers.
+const LOCAL_MODEL = process.env["OLLAMA_LOCAL_MODEL"] ?? "qwen2.5:14b";
 const VISION_MODEL = process.env["OLLAMA_VISION_MODEL"] ?? "qwen2.5vl:7b";
 
 const ROUTE_MODEL_MAP: Record<RouteClass, string> = {
-  FAST:      LOCAL_MODEL,
-  SMART:     LOCAL_MODEL,
-  RESEARCH:  LOCAL_MODEL,
-  CODING:    LOCAL_MODEL,
-  VISION:    VISION_MODEL,
-  AGENT:     LOCAL_MODEL,
+  FAST: process.env["OLLAMA_FAST_MODEL"] ?? LOCAL_MODEL,
+  SMART: process.env["OLLAMA_SMART_MODEL"] ?? LOCAL_MODEL,
+  RESEARCH: process.env["OLLAMA_RESEARCH_MODEL"] ?? LOCAL_MODEL,
+  CODING: process.env["OLLAMA_CODING_MODEL"] ?? LOCAL_MODEL,
+  VISION: VISION_MODEL,
+  AGENT: process.env["OLLAMA_AGENT_MODEL"] ?? LOCAL_MODEL,
   // Previous Z.ai mapping, kept for restore:
   // FAST: "glm-4.7-flash", SMART: "glm-4.7", RESEARCH: "glm-5.2",
   // CODING: "glm-5.3-flash", VISION: "glm-4.6v-flash", AGENT: "glm-5.3",
@@ -65,7 +69,19 @@ const CLASS_PATTERNS: ClassPattern[] = [
       /\bwhat's my battery\b/i,
       /\bhow much (battery|storage|ram|memory|space)\b/i,
     ],
-    keywords: ["volume", "brightness", "battery", "storage", "finder", "terminal", "launch", "quit app", "open app", "list apps", "list files"],
+    keywords: [
+      "volume",
+      "brightness",
+      "battery",
+      "storage",
+      "finder",
+      "terminal",
+      "launch",
+      "quit app",
+      "open app",
+      "list apps",
+      "list files",
+    ],
     reason: "agentic/action request detected",
   },
   {
@@ -119,15 +135,27 @@ function classifyRequest(message: string): RouteResult {
   }
 
   if (msg.length > 500) {
-    return { route: "SMART", model: ROUTE_MODEL_MAP.SMART, reason: "long message (>500 chars), defaulting to SMART" };
+    return {
+      route: "SMART",
+      model: ROUTE_MODEL_MAP.SMART,
+      reason: "long message (>500 chars), defaulting to SMART",
+    };
   }
 
-  return { route: "FAST", model: ROUTE_MODEL_MAP.FAST, reason: "simple/short request, using FAST for speed" };
+  return {
+    route: "FAST",
+    model: ROUTE_MODEL_MAP.FAST,
+    reason: "simple/short request, using FAST for speed",
+  };
 }
 
 export function routeRequest(message: string, hasImage: boolean): RouteResult {
   if (hasImage) {
-    return { route: "VISION", model: ROUTE_MODEL_MAP.VISION, reason: "image attached, using VISION model" };
+    return {
+      route: "VISION",
+      model: ROUTE_MODEL_MAP.VISION,
+      reason: "image attached, using VISION model",
+    };
   }
   return classifyRequest(message);
 }

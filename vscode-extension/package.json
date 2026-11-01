@@ -1,0 +1,124 @@
+{
+  "name": "jarvis-coding-agent",
+  "displayName": "JARVIS",
+  "description": "JARVIS coding agent sidebar \u2014 talks to your local JARVIS backend. Investigate, edit, verify.",
+  "version": "0.1.0",
+  "publisher": "jarvis-local",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jarvis",
+          "title": "JARVIS",
+          "icon": "media/jarvis.svg"
+        }
+      ]
+    },
+    "views": {
+      "jarvis": [
+        {
+          "type": "webview",
+          "id": "jarvis.chat",
+          "name": "JARVIS"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "jarvis.newTask",
+        "title": "JARVIS: New Task"
+      },
+      {
+        "command": "jarvis.explainSelection",
+        "title": "JARVIS: Explain Selection"
+      },
+      {
+        "command": "jarvis.explainFile",
+        "title": "JARVIS: Explain This File"
+      },
+      {
+        "command": "jarvis.fixProblems",
+        "title": "JARVIS: Diagnose File Problems"
+      },
+      {
+        "command": "jarvis.reviewChanges",
+        "title": "JARVIS: Review Task Changes"
+      },
+      {
+        "command": "jarvis.cancelTask",
+        "title": "JARVIS: Cancel Running Task"
+      },
+      {
+        "command": "jarvis.openMemory",
+        "title": "JARVIS: Inspect Project Memory"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "jarvis.explainSelection",
+          "when": "editorHasSelection",
+          "group": "jarvis@1"
+        },
+        {
+          "command": "jarvis.fixProblems",
+          "group": "jarvis@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "jarvis.explainSelection",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "JARVIS",
+      "properties": {
+        "jarvis.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:3000",
+          "description": "Base URL of the local JARVIS backend (loopback only)."
+        },
+        "jarvis.tokenPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the agent token file. Defaults to <workspace>/.jarvis/agent-token."
+        },
+        "jarvis.pollIntervalMs": {
+          "type": "number",
+          "default": 800,
+          "minimum": 300,
+          "maximum": 5000,
+          "description": "Task status polling interval in milliseconds."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "typecheck": "tsc -p ./ --noEmit",
+    "watch": "tsc -w -p ./",
+    "test": "node --import tsx --test src/*.test.ts",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.0"
+  }
+}

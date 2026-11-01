@@ -79,19 +79,17 @@ describe("hasUnplannedServices", () => {
     expect(
       hasUnplannedServices("check my email and calendar", [
         { tool: "gmail_list_recent", args: {} },
-      ])
+      ]),
     ).toBe(true);
     expect(
       hasUnplannedServices("check my email and calendar", [
         { tool: "gmail_list_recent", args: {} },
         { tool: "calendar_list_events", args: {} },
-      ])
+      ]),
     ).toBe(false);
     expect(hasUnplannedServices("search notion for JARVIS TEST", [])).toBe(true);
     expect(
-      hasUnplannedServices("search notion for JARVIS TEST", [
-        { tool: "notion_search", args: {} },
-      ])
+      hasUnplannedServices("search notion for JARVIS TEST", [{ tool: "notion_search", args: {} }]),
     ).toBe(false);
     expect(hasUnplannedServices("what is the weather", [])).toBe(false);
   });
@@ -117,18 +115,21 @@ describe("planner prompt", () => {
 
 describe("parsePlan", () => {
   it("parses clean JSON", () => {
-    expect(parsePlan('{"tools":[{"tool":"notion_search","args":{"query":"JARVIS TEST"}}]}')).toEqual([
-      { tool: "notion_search", args: { query: "JARVIS TEST" } },
-    ]);
+    expect(
+      parsePlan('{"tools":[{"tool":"notion_search","args":{"query":"JARVIS TEST"}}]}'),
+    ).toEqual([{ tool: "notion_search", args: { query: "JARVIS TEST" } }]);
   });
 
   it("tolerates code fences and chatter", () => {
-    const raw = 'Sure!\n```json\n{"tools":[{"tool":"gmail_search","args":{"query":"from:bob"}}]}\n```';
+    const raw =
+      'Sure!\n```json\n{"tools":[{"tool":"gmail_search","args":{"query":"from:bob"}}]}\n```';
     expect(parsePlan(raw)[0]?.tool).toBe("gmail_search");
   });
 
   it("drops unknown tools and bad shapes", () => {
-    expect(parsePlan('{"tools":[{"tool":"run_command","args":{"command":"rm -rf /"}}]}')).toEqual([]);
+    expect(parsePlan('{"tools":[{"tool":"run_command","args":{"command":"rm -rf /"}}]}')).toEqual(
+      [],
+    );
     expect(parsePlan("not json")).toEqual([]);
     expect(parsePlan('{"tools":"nope"}')).toEqual([]);
   });
@@ -137,7 +138,9 @@ describe("parsePlan", () => {
     const t = '{"tool":"notion_read_page","args":{"pageId":"{{notion_search.0.id}}"}}';
     expect(parsePlan(`{"tools":[${t}]}`)).toEqual([]);
     expect(
-      parsePlan('{"tools":[{"tool":"notion_append_blocks","args":{"pageId":"3ef62db4","content":"hi"}}]}')
+      parsePlan(
+        '{"tools":[{"tool":"notion_append_blocks","args":{"pageId":"3ef62db4","content":"hi"}}]}',
+      ),
     ).toHaveLength(1);
   });
 
@@ -156,8 +159,8 @@ describe("looksLikeDataRequest / buildToolContext", () => {
     expect(
       looksLikeDataRequest(
         "add an introduction about yourself below these lines on the same page",
-        "user: What is written on JARVIS TEST page on my notion profile"
-      )
+        "user: What is written on JARVIS TEST page on my notion profile",
+      ),
     ).toBe(true);
   });
 

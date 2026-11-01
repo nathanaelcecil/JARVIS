@@ -16,6 +16,7 @@ import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { guardLocalRequest } from "../../lib/local-request-guard";
 
 const WHISPER_BIN =
   process.env["WHISPER_BIN"] ?? "/opt/homebrew/bin/whisper-cli";
@@ -63,6 +64,8 @@ export const Route = createFileRoute("/api/transcribe")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const blocked = guardLocalRequest(request);
+        if (blocked) return blocked;
         let audioBase64: string | undefined;
         let mimeType: string | undefined;
         try {

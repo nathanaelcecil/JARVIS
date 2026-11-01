@@ -2,22 +2,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRunningTasks, getTaskSummary, getTask } from "../lib/ai/task-registry";
 
 /** Get status of all running tasks */
-export const getTaskStatus = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const running = getRunningTasks();
-    return {
-      count: running.length,
-      tasks: running.map((t) => ({
-        id: t.id,
-        status: t.status,
-        message: t.message,
-        route: t.route,
-        model: t.model,
-        elapsedMs: Date.now() - t.createdAt,
-      })),
-      summary: getTaskSummary(),
-    };
-  });
+export const getTaskStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const running = getRunningTasks();
+  return {
+    count: running.length,
+    tasks: running.map((t) => ({
+      id: t.id,
+      status: t.status,
+      message: t.message,
+      route: t.route,
+      model: t.model,
+      elapsedMs: Date.now() - t.createdAt,
+    })),
+    summary: getTaskSummary(),
+  };
+});
 
 /** Get status of a specific task */
 export const getTaskById = createServerFn({ method: "GET" })
