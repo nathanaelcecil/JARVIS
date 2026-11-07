@@ -25,9 +25,18 @@ swiftc -O \
     -o "$BIN" \
     main.swift
 
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || \
+# Ad-hoc signing alone yields a cdhash-only designated requirement, so every
+# rebuild would invalidate the Accessibility grant. Pin the requirement to the
+# bundle identifier instead: the grant then survives rebuilds.
+codesign --force --deep --sign - \
+    --identifier local.jarvis.menubar \
+    --requirements '=designated => identifier "local.jarvis.menubar"' \
+    "$APP" >/dev/null 2>&1 || \
     echo "note: ad-hoc codesign skipped"
 
 echo "Done. Launch with: open $APP"
-echo "Permissions are requested on first use (Microphone, Speech Recognition,"
-echo "and Accessibility for the jarvis-hands-control helper)."
+echo "Permissions are requested on first use (Microphone, Speech Recognition)."
+echo ""
+echo "Accessibility: if the grant is ever lost, remove and re-add \"JARVIS Menu"
+echo "Bar\" in System Settings → Privacy & Security → Accessibility once; the"
+echo "signature now keys to the bundle id, so later rebuilds keep the grant."

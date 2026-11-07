@@ -27,6 +27,7 @@
 import AVFoundation
 import Cocoa
 import Carbon.HIToolbox
+import ApplicationServices
 import Speech
 
 // ── Configuration ──────────────────────────────────────────────────────────
@@ -37,14 +38,34 @@ let meetingsDir = FileManager.default
     .appendingPathComponent("Documents/JARVIS/meetings", isDirectory: true)
 
 func helperPath() -> String {
-    // The app lives in native/jarvis-menubar/bin; the helper is a sibling tree.
+    // The bundle is native/jarvis-menubar/bin/JARVISMenuBar.app; the helper is
+    // a sibling tree at native/jarvis-hands-control/ — strip .app, bin/ and
+    // jarvis-menubar/ to reach native/.
     let bundle = Bundle.main.bundleURL
-    let native = bundle.deletingLastPathComponent().deletingLastPathComponent()
+    let native = bundle
+        .deletingLastPathComponent() // JARVISMenuBar.app → bin
+        .deletingLastPathComponent() // bin → jarvis-menubar
+        .deletingLastPathComponent() // jarvis-menubar → native
     return native.appendingPathComponent("jarvis-hands-control/bin/jarvis-hands-control").path
 }
 
 func log(_ message: String) {
-    FileHandle.standardError.write(("[JARVISMenuBar] " + message + "\n").data(using: .utf8)!)
+    let line = "[JARVISMenuBar] " + message + "\n"
+    FileHandle.standardError.write(line.data(using: .utf8)!)
+    // `open` detaches stdout/stderr, so also keep a file log we can read.
+    let url = URL(fileURLWithPath: "/tmp/jarvis-logs/menubar.log")
+    if !FileManager.default.fileExists(atPath: url.path) {
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+    }
+    if let handle = try? FileHandle(forWritingTo: url) {
+        do {
+            _ = try handle.seekToEnd()
+            try handle.write(line.data(using: .utf8)!)
+        } catch {
+            // File logging is best-effort; never break the caller.
+        }
+        try? handle.close()
+    }
 }
 
 // ── Typing into the frontmost app ──────────────────────────────────────────
@@ -52,6 +73,34 @@ func log(_ message: String) {
 enum TypingResult {
     case typed
     case copied(String)
+}
+
+/// Type from inside this process. The menu-bar app holds the Accessibility
+/// grant, while the helper — spawned from us — is evaluated under its own
+/// unsigned binary identity and gets denied. So when the helper is refused we
+/// finish the job ourselves with synthetic unicode key events.
+func typeInProcess(_ text: String) -> Bool {
+    guard AXIsProcessTrusted() else { return false }
+    let source = CGEventSource(stateID: .hidSystemState)
+    let units = Array(text.utf16)
+    var index = 0
+    while index < units.count {
+        let end = min(index + 20, units.count)
+        let chunk = Array(units[index..<end])
+        guard
+            let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+            let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        else { return false }
+        chunk.withUnsafeBufferPointer { buffer in
+            down.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: buffer.baseAddress)
+            up.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: buffer.baseAddress)
+        }
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        usleep(2000)
+        index = end
+    }
+    return true
 }
 
 func typeIntoFrontmostApp(_ text: String, completion: @escaping (TypingResult) -> Void) {
@@ -69,11 +118,24 @@ func typeIntoFrontmostApp(_ text: String, completion: @escaping (TypingResult) -
             if process.terminationStatus == 0, (json?["ok"] as? Bool) == true {
                 completion(.typed)
             } else {
+                let code = (json?["code"] as? String) ?? "failed"
+                if code == "accessibility_denied" {
+                    // The app itself is the Accessibility-trusted identity, so
+                    // retry from here before giving up on typing.
+                    if typeInProcess(text) {
+                        log("typing: helper denied, typed in-process")
+                        completion(.typed)
+                        return
+                    }
+                    // Neither identity may type: ask the system for the grant.
+                    AXIsProcessTrustedWithOptions([
+                        kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
+                    ] as CFDictionary)
+                }
                 // Never lose the words: put them on the clipboard and say so.
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
                 pasteboard.setString(text, forType: .string)
-                let code = (json?["code"] as? String) ?? "failed"
                 completion(.copied(code))
             }
         }
@@ -340,6 +402,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
     private var meetingURL: URL?
 
     private var wakeEnabled = false
+    // Privacy: keep the always-listening audio on-device when the model exists.
+    private var wakePrefersOnDevice = true
     private var wakeTask: SFSpeechRecognitionTask?
     private var wakeRequest: SFSpeechAudioBufferRecognitionRequest?
     private let wakeEngine = AVAudioEngine()
@@ -353,6 +417,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
         rebuildMenu()
         registerHotKey()
         log("ready — app origin \(appOrigin)")
+        // Accessibility is keyed to this binary's code signature; a rebuild
+        // invalidates the old grant. Surface it so grants are quick to check.
+        log("accessibility trusted = \(AXIsProcessTrusted())")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -521,7 +588,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
                 case .copied(let reason):
                     self.showError(
                         "Text copied instead of typed",
-                        "The helper could not type into the frontmost app (\(reason)). The words are on your clipboard — press ⌘V. Accessibility may need granting for jarvis-hands-control."
+                        "The helper could not type into the frontmost app (\(reason)). The words are on your clipboard — press ⌘V. Grant Accessibility to JARVIS Menu Bar in System Settings → Privacy & Security → Accessibility (re-toggle it after every rebuild)."
                     )
                 }
             }
@@ -574,6 +641,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
     private func beginWakeWord() {
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
+                // The menu title can lag the real state (this runs async), so
+                // re-check everything before touching the mic.
+                guard !self.wakeEnabled, !self.isDictating, !self.isRecordingMeeting else {
+                    log("wake: skipped (already active)")
+                    return
+                }
+                log("wake: speech authorization status = \(status.rawValue)")
                 guard status == .authorized else {
                     self.showError("Speech recognition is off", "Enable it in System Settings → Privacy & Security → Speech Recognition for JARVIS Menu Bar.")
                     return
@@ -584,6 +658,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
                 }
                 AVCaptureDevice.requestAccess(for: .audio) { granted in
                     DispatchQueue.main.async {
+                        log("wake: mic granted = \(granted)")
                         guard granted else { return }
                         self.startWakeWord(recognizer)
                     }
@@ -596,7 +671,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
         guard !wakeEnabled else { return }
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        if recognizer.supportsOnDeviceRecognition {
+        if wakePrefersOnDevice, recognizer.supportsOnDeviceRecognition {
             // On-device keeps the always-listening audio local.
             request.requiresOnDeviceRecognition = true
         }
@@ -617,6 +692,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
         }
 
         wakeEnabled = true
+        rebuildMenu()
+        log("wake: listening (onDevice=\(request.requiresOnDeviceRecognition))")
+        let usedOnDevice = request.requiresOnDeviceRecognition
         wakeTask = recognizer.recognitionTask(with: request) { result, error in
             // Recognisers disagree on this name ("Jarvis", "Javis", "Jarvas"),
             // so accept the common misspellings rather than making the user
@@ -632,8 +710,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
             }
             if error != nil || result?.isFinal == true {
                 // Recognition tasks end on their own; restart while enabled.
-                DispatchQueue.main.async {
+                // Back off first — a task that fails instantly (e.g. a missing
+                // on-device model) would otherwise spin in a tight loop.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     guard self.wakeEnabled else { return }
+                    if usedOnDevice, error != nil {
+                        // On-device model missing — fall back to server-backed.
+                        self.wakePrefersOnDevice = false
+                    }
                     self.stopWakeWord()
                     self.beginWakeWord()
                 }
@@ -651,6 +735,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
             wakeEngine.stop()
             wakeEngine.inputNode.removeTap(onBus: 0)
         }
+        rebuildMenu()
     }
 
     // ── Global hotkey (⌃⌥D) ───────────────────────────────────────────────
@@ -679,6 +764,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
     }
 
     private func showError(_ title: String, _ body: String) {
+        log("error: \(title) — \(body)")
+        // Accessory apps can otherwise leave the alert behind other windows.
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = body

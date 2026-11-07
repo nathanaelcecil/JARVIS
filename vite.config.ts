@@ -9,7 +9,9 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 export default defineConfig({
   vite: {
     server: {
-      port: 3000,
+      // Keep in sync with the menu-bar app's default app origin and
+      // scripts/verify.ts (both expect http://127.0.0.1:4173).
+      port: 4173,
     },
   },
   tanstackStart: {

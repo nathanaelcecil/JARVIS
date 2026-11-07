@@ -293,7 +293,7 @@ fi
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║   JARVIS is running!                ║"
-echo "  ║   http://localhost:3000              ║"
+echo "  ║   http://localhost:4173              ║"
 echo "  ║                                      ║"
 echo "  ║   Press Ctrl+C to stop everything.   ║"
 echo "  ╚══════════════════════════════════════╝"
