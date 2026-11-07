@@ -34,6 +34,7 @@ export const TOOL_TIERS: Record<string, ToolTier> = {
   hands_status: "auto",
   hands_look: "auto",
   hands_read_screen: "auto",
+  hands_crop: "auto",
 
   // Hands v2 — computer CONTROL. These act on the user's Mac, so every one is
   // confirm-tier: the bearer secret alone is not enough, a call needs an

@@ -19,6 +19,7 @@ import { listFacts, profileContext } from "../../lib/profile";
 import { supabaseAdmin } from "../../lib/supabase-server";
 import { isKillSwitchActive, logActivity } from "../../lib/guardrails";
 import { authorizeToolCall } from "../../lib/tool-authorization";
+import { clearTaskApprovals } from "../../lib/task-approvals";
 import { routeRequest } from "../../lib/ai/router";
 import { registerTask, updateTaskStatus, cleanupOldTasks } from "../../lib/ai/task-registry";
 import { routeToolCall } from "../../lib/mcp/registry";
@@ -374,6 +375,10 @@ export const Route = createFileRoute("/api/stream")({
           console.error("[Proactive] scheduler start failed:", schedErr);
         }
 
+        // One scope id per chat turn: "always allow for this task" is limited to
+        // this stream and is dropped when it ends or is cancelled.
+        const taskId = crypto.randomUUID();
+
         // Set when a task registers; ReadableStream.cancel() aborts it so an
         // interrupted client stops the in-flight Ollama request immediately.
         let activeTask: { abortController: AbortController } | null = null;
@@ -454,6 +459,7 @@ export const Route = createFileRoute("/api/stream")({
                     tool: fastPath.tool,
                     args: fastPath.args,
                     source: "fast",
+                    taskId,
                     signal,
                     // Same event, same key order as before.
                     emitConfirmRequest: (payload) => write(sseEvent("confirm_request", payload)),
@@ -822,6 +828,7 @@ export const Route = createFileRoute("/api/stream")({
                     tool: tc.tool,
                     args: tc.args,
                     source: "data",
+                    taskId,
                     signal,
                     emitConfirmRequest: (payload) => write(sseEvent("confirm_request", payload)),
                   });
@@ -1086,6 +1093,7 @@ export const Route = createFileRoute("/api/stream")({
                       tool: tc.tool,
                       args: tc.args,
                       source: "tool",
+                      taskId,
                       signal,
                       emitConfirmRequest: (payload) => write(sseEvent("confirm_request", payload)),
                     });
@@ -1298,6 +1306,7 @@ export const Route = createFileRoute("/api/stream")({
                 console.error("[Stream] Error:", errorMsg);
                 write(sseEvent("error", { error: errorMsg }));
               } finally {
+                clearTaskApprovals(taskId);
                 controller.close();
               }
             })();
@@ -1307,6 +1316,7 @@ export const Route = createFileRoute("/api/stream")({
             // aborted the fetch) — abort the in-flight LLM request so
             // token generation stops immediately.
             console.log("[Stream] Client cancelled — aborting active task");
+            clearTaskApprovals(taskId);
             activeTask?.abortController.abort();
           },
         });

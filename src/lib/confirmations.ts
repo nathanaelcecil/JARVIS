@@ -17,6 +17,8 @@ interface PendingConfirmation {
   resolve: (decision: ConfirmDecision) => void;
   tool: string;
   args: Record<string, unknown>;
+  /** Chat turn this prompt belongs to, for "always allow for this task". */
+  taskId?: string | undefined;
   createdAt: number;
   timer: ReturnType<typeof setTimeout>;
 }
@@ -45,6 +47,8 @@ export function registerConfirmation(params: {
   tool: string;
   args: Record<string, unknown>;
   confirmId?: string;
+  /** When set, the UI may offer to allow this tool for the rest of the task. */
+  taskId?: string | undefined;
 }): Promise<ConfirmDecision> {
   return new Promise((resolve) => {
     const confirmId = params.confirmId ?? mintConfirmId();
@@ -58,6 +62,7 @@ export function registerConfirmation(params: {
       resolve,
       tool: params.tool,
       args: params.args,
+      taskId: params.taskId,
       createdAt: Date.now(),
       timer,
     });

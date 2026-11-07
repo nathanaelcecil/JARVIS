@@ -10,14 +10,29 @@ interface ConfirmActionProps {
   args: Record<string, unknown>;
   onApprove: () => void;
   onDeny: () => void;
+  /**
+   * Offered only when the server sent a task id: "always allow for this task"
+   * skips the prompt for the same tool until this chat turn ends.
+   */
+  onApproveForTask?: (() => void) | undefined;
 }
 
-export function ConfirmAction({ tool, args, onApprove, onDeny }: ConfirmActionProps) {
+export function ConfirmAction({
+  tool,
+  args,
+  onApprove,
+  onDeny,
+  onApproveForTask,
+}: ConfirmActionProps) {
   const [decided, setDecided] = useState(false);
 
   const handleApprove = () => {
     setDecided(true);
     onApprove();
+  };
+  const handleApproveForTask = () => {
+    setDecided(true);
+    onApproveForTask?.();
   };
   const handleDeny = () => {
     setDecided(true);
@@ -97,6 +112,15 @@ export function ConfirmAction({ tool, args, onApprove, onDeny }: ConfirmActionPr
           Deny
         </button>
       </div>
+      {onApproveForTask && (
+        <button
+          onClick={handleApproveForTask}
+          data-testid="confirm-allow-task"
+          className="mt-2 w-full px-3 py-1.5 bg-transparent hover:bg-white/5 text-white/50 hover:text-white/70 border border-white/10 rounded text-xs font-mono transition-colors"
+        >
+          Always allow “{friendlyName}” for this task
+        </button>
+      )}
     </div>
   );
 }

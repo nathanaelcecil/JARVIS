@@ -640,12 +640,67 @@ export class FallbackProvider implements AIProvider {
   }
 }
 
+// ─── Escalation Wrapper — cheap answer fails, work model retries ─
+
+/**
+ * Model used when a cheap route produces nothing usable. Overridable so the
+ * work model can change without code edits.
+ */
+export function escalationModel(): string {
+  return (
+    process.env["OLLAMA_ESCALATION_MODEL"] ??
+    process.env["OLLAMA_SMART_MODEL"] ??
+    process.env["OLLAMA_LOCAL_MODEL"] ??
+    "qwen2.5:14b"
+  );
+}
+
+/**
+ * Retry a chat completion once on the work model when the requested model
+ * throws or returns an empty answer. Streams are not escalated: tokens have
+ * already reached the user, so re-running would duplicate output.
+ */
+export class EscalatingProvider implements AIProvider {
+  private inner: AIProvider;
+  private workModel: string;
+
+  constructor(inner: AIProvider, workModel: string = escalationModel()) {
+    this.inner = inner;
+    this.workModel = workModel;
+  }
+
+  private shouldEscalate(model: string): boolean {
+    return model !== this.workModel && this.workModel.trim().length > 0;
+  }
+
+  async chat(params: {
+    messages: ChatMessage[];
+    model: string;
+    signal?: AbortSignal;
+  }): Promise<{ content: string; metadata?: ResponseMetadata }> {
+    const escalate = (reason: string) => {
+      console.warn(`[Provider] ${reason} — escalating ${params.model} → ${this.workModel}`);
+      return this.inner.chat({ ...params, model: this.workModel });
+    };
+
+    try {
+      const result = await this.inner.chat(params);
+      if (result.content.trim().length > 0 || !this.shouldEscalate(params.model)) return result;
+      return await escalate("empty answer");
+    } catch (err) {
+      if (params.signal?.aborted) throw err;
+      if (!this.shouldEscalate(params.model)) throw err;
+      return await escalate(err instanceof Error ? err.message : "primary failed");
+    }
+  }
+}
+
 // ─── Provider Factory ───────────────────────────────────────
 
 export function createProvider(): AIProvider {
-  // ── Active path: local Ollama (qwen2.5:14b) ──
+  // ── Active path: local Ollama (qwen2.5:14b), escalating on failure ──
   console.log("[Provider] Using local Ollama (localhost:11434, qwen2.5:14b)");
-  return new OllamaProvider();
+  return new EscalatingProvider(new OllamaProvider());
 
   // ── DISABLED (2026-09): Z.ai primary + Gemini fallback ──
   // Restore by deleting the two lines above and uncommenting below.

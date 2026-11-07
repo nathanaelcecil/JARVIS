@@ -317,6 +317,58 @@ export async function handsLook(
   };
 }
 
+/**
+ * Crop one screen region — the "point here and ask" capability.
+ * Shares handsLook's private directory and retention so the same tooling can
+ * read the result, and refuses regions too small to be meaningful.
+ */
+export async function handsCrop(args: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  display?: number;
+}): Promise<unknown> {
+  pruneLookFiles();
+  const numbers = [args.x, args.y, args.width, args.height];
+  if (!numbers.every((value) => Number.isFinite(value))) {
+    return {
+      ok: false,
+      code: "invalid_region",
+      error: "x, y, width and height must all be finite numbers.",
+    };
+  }
+  if (args.width < 8 || args.height < 8) {
+    return {
+      ok: false,
+      code: "invalid_region",
+      error: "a crop must be at least 8×8 pixels; aim at a feature, not a point.",
+    };
+  }
+  const dir = ensureLookDir();
+  const file = join(dir, `crop-${Date.now()}-${Math.floor(Math.random() * 1e6)}.png`);
+  const region = [args.x, args.y, args.width, args.height].map((v) => Math.round(v));
+  const argv = ["-x", "-t", "png", "-R", region.join(",")];
+  if (typeof args.display === "number") argv.push("-D", String(args.display));
+  argv.push(file);
+  const result = await runScreencapture(argv);
+  if (result.status !== 0 || !existsSync(file)) {
+    rmSync(file, { force: true });
+    log("hands_crop", `→ failed status=${result.status}`);
+    return screenRecordingDenied(result.stderr);
+  }
+  const size = statSync(file).size;
+  log("hands_crop", `→ ok ${size}B region=${region.join(",")}`);
+  return {
+    ok: true,
+    tool: "crop",
+    path: file,
+    bytes: size,
+    region: { x: region[0], y: region[1], width: region[2], height: region[3] },
+    note: "The cropped region is on disk for a vision-capable model; nothing was modified on screen.",
+  };
+}
+
 /** Vision OCR of a screenshot this module captured. */
 export async function handsOcr(path: string): Promise<unknown> {
   if (!isLookFile(path)) {

@@ -35,6 +35,7 @@ const PERMISSIONS: Record<string, Permission> = {
   "hands.status": "auto",
   "hands.look": "auto",
   "hands.read_screen": "auto",
+  "hands.crop": "auto",
 
   // Hands v2 — computer control. Reading the control map or the permission
   // state changes nothing, so those are auto; every action that clicks, types,
@@ -208,6 +209,7 @@ export function toolPermissionCategory(toolName: string): string {
     hands_status: "hands.status",
     hands_look: "hands.look",
     hands_read_screen: "hands.read_screen",
+    hands_crop: "hands.crop",
     control_map: "control.map",
     control_wait: "control.wait",
     control_scroll_to: "control.scroll_to",

@@ -4,7 +4,12 @@
  * approving Google consent in another tab.)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getPendingConfirmation, mintConfirmId, registerConfirmation } from "./confirm";
+import { getPendingConfirmation, mintConfirmId, registerConfirmation, Route } from "./confirm";
+import {
+  clearAllTaskApprovals,
+  isToolAllowedForTask,
+  taskApprovalScopeCount,
+} from "../../lib/task-approvals";
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -86,5 +91,52 @@ describe("registerConfirmation", () => {
     const pending = getPendingConfirmation("meta1");
     expect(pending?.tool).toBe("gmail.gmail_send_email");
     expect(pending?.args).toEqual({ to: "bob@example.com" });
+  });
+});
+
+// ── Task-scoped widening ───────────────────────────────────────────────────
+
+describe("POST /api/confirm scope=task", () => {
+  type Handler = (ctx: { request: Request }) => Promise<Response>;
+  const route = Route as unknown as {
+    options: { server: { handlers: { POST: Handler } } };
+  };
+  const post = (body: Record<string, unknown>) =>
+    route.options.server.handlers.POST({
+      request: new Request("http://127.0.0.1:4173/api/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Host: "127.0.0.1:4173" },
+        body: JSON.stringify(body),
+      }),
+    });
+
+  beforeEach(() => {
+    clearAllTaskApprovals();
+  });
+
+  it("widens the approval to the whole task only when asked", async () => {
+    void registerConfirmation({ tool: "control_type", args: {}, confirmId: "w1", taskId: "t1" });
+    const res = await post({ confirmId: "w1", approved: true, scope: "task" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ approved: true, scope: "task" });
+    expect(isToolAllowedForTask("t1", "control_type")).toBe(true);
+  });
+
+  it("keeps a plain approve single-use", async () => {
+    void registerConfirmation({ tool: "control_type", args: {}, confirmId: "w2", taskId: "t2" });
+    const res = await post({ confirmId: "w2", approved: true });
+    expect(await res.json()).toMatchObject({ approved: true, scope: "once" });
+    expect(isToolAllowedForTask("t2", "control_type")).toBe(false);
+  });
+
+  it("never widens a denial, or a prompt with no task id", async () => {
+    void registerConfirmation({ tool: "control_type", args: {}, confirmId: "w3", taskId: "t3" });
+    await post({ confirmId: "w3", approved: false, scope: "task" });
+    expect(isToolAllowedForTask("t3", "control_type")).toBe(false);
+
+    void registerConfirmation({ tool: "control_type", args: {}, confirmId: "w4" });
+    const res = await post({ confirmId: "w4", approved: true, scope: "task" });
+    expect(await res.json()).toMatchObject({ approved: true, scope: "once" });
+    expect(taskApprovalScopeCount()).toBe(0);
   });
 });

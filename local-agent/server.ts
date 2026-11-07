@@ -34,6 +34,7 @@ import {
   handsStatus,
   handsLook,
   handsReadScreen,
+  handsCrop,
 } from "./tools/hands";
 import { spotlightSearch, contactsSearch, spotifyControl, spotifyStatus } from "./tools/mac";
 import { openSettings, wait } from "./tools/parity";
@@ -153,6 +154,16 @@ export const TOOLS: Record<string, ToolHandler> = {
   hands_status: () => handsStatus(),
   hands_look: (args) => handsLook(args as { display?: number; pid?: number; windowIndex?: number }),
   hands_read_screen: (args) => handsReadScreen(args as { pid: number; windowIndex?: number }),
+  hands_crop: (args) =>
+    handsCrop(
+      args as {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        display?: number;
+      },
+    ),
 
   // Hands v2 — computer CONTROL. Every one of these is confirm-tier: the local
   // agent refuses the call without an approval token, so the bearer secret

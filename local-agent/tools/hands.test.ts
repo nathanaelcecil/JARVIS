@@ -23,6 +23,7 @@ import {
   handsListWindows,
   handsReadFocused,
   handsReadWindow,
+  handsCrop,
   runHands,
 } from "./hands";
 import { TOOLS } from "../server";
@@ -35,6 +36,9 @@ const HANDS_TOOLS = [
   "hands_read_window",
   "hands_read_focused",
   "hands_status",
+  "hands_look",
+  "hands_read_screen",
+  "hands_crop",
 ] as const;
 
 // ── 1. Static: the helper cannot act ───────────────────────────────────────
@@ -224,6 +228,27 @@ describe("hands tools are registered, validated and read-only", () => {
     expect(validateToolArgs("hands_list_windows", { anything: 1 }).ok).toBe(false);
     expect(validateToolArgs("hands_read_focused", {}).ok).toBe(true);
     expect(validateToolArgs("hands_status", {}).ok).toBe(true);
+    // hands_crop: a region is four numbers, all required, and a crop smaller
+    // than 8×8 is refused as meaningless rather than captured.
+    expect(validateToolArgs("hands_crop", { x: 10, y: 20, width: 300, height: 200 }).ok).toBe(true);
+    expect(validateToolArgs("hands_crop", { x: -500, y: 0, width: 300, height: 200 }).ok).toBe(
+      true,
+    );
+    expect(validateToolArgs("hands_crop", { x: 10, y: 20, width: 300 }).ok).toBe(false);
+    expect(validateToolArgs("hands_crop", { x: 10, y: 20, width: 4, height: 200 }).ok).toBe(false);
+    expect(validateToolArgs("hands_crop", { x: "10", y: 20, width: 300, height: 200 }).ok).toBe(
+      false,
+    );
+  });
+
+  it("refuses a crop too small to be meaningful before capturing anything", async () => {
+    await expect(handsCrop({ x: 0, y: 0, width: 4, height: 4 })).resolves.toMatchObject({
+      ok: false,
+      code: "invalid_region",
+    });
+    await expect(
+      handsCrop({ x: Number.NaN, y: 0, width: 100, height: 100 }),
+    ).resolves.toMatchObject({ ok: false, code: "invalid_region" });
   });
 
   it("is auto-tier in both permission tables (read-only means no prompt)", () => {

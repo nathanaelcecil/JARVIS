@@ -149,6 +149,17 @@ export const TOOL_ARG_SPECS: Record<string, ToolArgSpec> = {
   hands_read_screen: {
     args: { pid: num(1, 4_194_304, true, true), windowIndex: num(0, 500, false, true) },
   },
+  // Crop a region ("point here and ask"). Coordinates may be negative on
+  // multi-display setups, so x/y allow the same range as control_click.
+  hands_crop: {
+    args: {
+      x: num(-10_000, 40_000, true, true),
+      y: num(-10_000, 40_000, true, true),
+      width: num(8, 20_000, true, true),
+      height: num(8, 20_000, true, true),
+      display: num(0, 15, false, true),
+    },
+  },
 
   // ── Hands v2 (computer control; confirm tier, never auto) ──
   // Numbers and enumerated strings only where possible: a control argument can

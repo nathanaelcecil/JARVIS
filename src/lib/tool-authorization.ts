@@ -28,6 +28,7 @@ import {
 } from "./confirmations";
 import { TOOL_TIERS } from "./tool-tiers";
 import { mintApprovalToken, readApprovalKey } from "../../local-agent/approval";
+import { isToolAllowedForTask } from "./task-approvals";
 
 export type AuthorizationSource = "fast" | "data" | "tool" | "engine" | "background";
 
@@ -38,12 +39,16 @@ export interface ConfirmRequestPayload {
   tool: string;
   args: Record<string, unknown>;
   confirmId: string;
+  /** Present when the UI may offer "always allow this tool for this task". */
+  taskId?: string | undefined;
 }
 
 export interface AuthorizeToolParams {
   tool: string;
   args: Record<string, unknown>;
   source: AuthorizationSource;
+  /** Chat turn id: enables "always allow for this task" and its reuse. */
+  taskId?: string | undefined;
   signal?: AbortSignal | undefined;
   /** Emit the SSE `confirm_request` (or an equivalent UI prompt). */
   emitConfirmRequest?: ((payload: ConfirmRequestPayload) => void) | undefined;
@@ -179,17 +184,32 @@ export async function authorizeToolCall(params: AuthorizeToolParams): Promise<Au
     return { ok: true, tier: "auto" };
   }
 
+  // The user already said "always allow this tool for this task": skip the
+  // prompt, but still mint a fresh single-use approval token below.
+  if (isToolAllowedForTask(params.taskId, params.tool)) {
+    const preApproved = mintLocalAgentApproval(params.tool, params.args);
+    return preApproved === undefined
+      ? { ok: true, tier: decision.tier }
+      : { ok: true, tier: decision.tier, approval: preApproved };
+  }
+
   const confirmId = mintConfirmId();
   // Register BEFORE emitting so a click that lands immediately after the
   // prompt can always find the pending entry.
   const registered = params.requestApproval
     ? null
-    : registerConfirmation({ tool: params.tool, args: params.args, confirmId });
+    : registerConfirmation({
+        tool: params.tool,
+        args: params.args,
+        confirmId,
+        taskId: params.taskId,
+      });
 
   params.emitConfirmRequest?.({
     tool: params.tool,
     args: params.args,
     confirmId,
+    ...(params.taskId ? { taskId: params.taskId } : {}),
   });
 
   const outcome = registered

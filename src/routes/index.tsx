@@ -107,6 +107,8 @@ function Index() {
     confirmId: string;
     tool: string;
     args: Record<string, unknown>;
+    /** Set when the server allows widening this approval to the whole task. */
+    taskId?: string | undefined;
   } | null>(null);
   // Ephemeral tool/ack status — deliberately OUTSIDE the spoken message body
   const [streamStatus, setStreamStatus] = useState<string | null>(null);
@@ -267,13 +269,13 @@ function Index() {
 
   // Handle confirmation dialog
   const handleConfirm = useCallback(
-    async (approved: boolean) => {
+    async (approved: boolean, scope: "once" | "task" = "once") => {
       if (!pendingConfirm) return;
       try {
         const res = await fetch("/api/confirm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confirmId: pendingConfirm.confirmId, approved }),
+          body: JSON.stringify({ confirmId: pendingConfirm.confirmId, approved, scope }),
         });
         if (!res.ok) {
           // The server already resolved/expired this prompt — the click was late.
@@ -597,11 +599,12 @@ function Index() {
                   break;
 
                 case "confirm_request":
-                  // Show confirmation prompt
+                  // Show confirmation prompt (taskId enables "allow for task")
                   setPendingConfirm({
                     confirmId: parsed.confirmId || "",
                     tool: parsed.tool,
                     args: parsed.args || {},
+                    taskId: typeof parsed.taskId === "string" ? parsed.taskId : undefined,
                   });
                   break;
 
@@ -897,6 +900,9 @@ function Index() {
               args={pendingConfirm.args}
               onApprove={() => handleConfirm(true)}
               onDeny={() => handleConfirm(false)}
+              {...(pendingConfirm.taskId
+                ? { onApproveForTask: () => handleConfirm(true, "task") }
+                : {})}
             />
           </div>
         )}

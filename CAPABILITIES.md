@@ -8,7 +8,7 @@ Start here:
 
 ```bash
 bun run verify            # typecheck, tests, lint, helpers, model, agent, STT, menu bar
-bun run dev               # the app, http://localhost:3000
+bun run dev               # the app, http://localhost:4173
 bun local-agent/server.ts # the tool agent, 127.0.0.1:3008 (normally started for you)
 ```
 
@@ -47,6 +47,7 @@ observation.
 | --- | --- | --- | --- |
 | Read windows and text | `hands_list_windows`, `hands_read_window`, `hands_read_focused` | auto | "what windows are open?" |
 | OCR a screen | `hands_read_screen`, `hands_look` | auto | "read my screen" |
+| Crop a region (point and ask) | `hands_crop(x, y, width, height)` | auto | "what does this say?" while pointing at a region |
 | Control map | `control_map` | auto | "what's clickable in Chrome?" |
 | Click | `control_click` | confirm | "click Save" |
 | Type | `control_type` | confirm | "type 'done' into the search field" |
@@ -61,11 +62,31 @@ observation.
 Every confirm-tier call shows a card first and only executes once you approve it;
 the approval token is bound to the exact tool and arguments and can be used once.
 
+The card also offers **"Always allow <tool> for this task"**. That widens the
+approval to the rest of the current chat turn only — the scope is dropped when
+the reply finishes or you cancel — and every call it lets through still gets its
+own single-use token. A plain Approve stays single-use as before.
+
+When a cheap route comes back empty or fails, the non-streamed completion is
+retried once on the work model (`OLLAMA_ESCALATION_MODEL`, default: the smart
+model); streams are never re-run, so output is not duplicated.
+
 Test (real, non-destructive):
 
 ```bash
 ./native/jarvis-hands-control/bin/jarvis-hands-control type --text "hello" --global
 ./native/jarvis-hands-control/bin/jarvis-hands-control key --combo "escape"
+```
+
+Test the region crop (read-only, same private directory as `hands_look`):
+
+```bash
+curl -s -X POST http://127.0.0.1:3008/call \
+  -H "Authorization: Bearer $(cat local-agent/.agent-secret)" \
+  -H 'Content-Type: application/json' \
+  -d '{"tool":"hands_crop","args":{"x":0,"y":0,"width":400,"height":300}}'
+# → {"ok":true,"tool":"crop","path":"/var/folders/…/crop-….png",…}
+# a region under 8×8 is refused: invalid_arguments, width must be between 8 and 20000
 ```
 
 ## 3. macOS integrations
@@ -162,6 +183,13 @@ open native/jarvis-menubar/bin/JARVISMenuBar.app
 If Accessibility is missing, dictation copies the text to your clipboard and says
 so instead of silently losing it.
 
+The app logs to `/tmp/jarvis-logs/menubar.log` — including
+`accessibility trusted = true|false` at startup, which is the fastest way to
+check the grant. `build.command` signs the bundle by **identifier**
+(`identifier "local.jarvis.menubar"`) so a rebuild no longer invalidates the
+grant; if it is ever lost anyway, remove and re-add the app in the Accessibility
+list once.
+
 Test: menu → **Check permissions** (shows the helper's JSON), then ⌃⌥D, say a
 sentence, press ⌃⌥D again, and watch it type wherever the cursor is.
 
@@ -183,6 +211,18 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: evil.example" http://127.0.0.
 # → 403
 ```
 
+Test the two Phase-4 behaviours:
+
+- **Task scope** — in one turn ask for the same confirm-tier tool twice (e.g.
+  "type X into the field, then type Y into another field"). On the first card
+  pick *Always allow “Type on Screen” for this task*: the second call runs with no
+  card. Start a new message and it asks again — scope never outlives the turn.
+- **Escalation** — point `OLLAMA_ESCALATION_MODEL` at a stronger model and ask
+  something that makes the fast model return an empty answer (very short/garbled
+  prompt). The server log shows
+  `[Provider] empty answer — escalating <cheap> → <work>` and the turn still
+  answers; aborted turns never retry.
+
 ## 9. Known limits (stated, not hidden)
 
 - Meetings capture the microphone, not system audio, so other participants are
@@ -202,6 +242,10 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: evil.example" http://127.0.0.
 | Reply text appears only when you focus the window | old build | Fixed: the reveal loop keeps a timer beside `requestAnimationFrame` |
 | Tools all fail with `approval_required` | expected for confirm-tier | approve the card; auto-tier tools run without one |
 | `automation_denied` | Contacts/Spotify Automation not granted | ask JARVIS to `open_settings automation` |
-| Dictation types nothing | Accessibility missing for the control helper | `open_settings accessibility`, then re-run `bun run verify` |
+| Dictation types nothing | Accessibility missing for the app/helper | `open_settings accessibility`; check `/tmp/jarvis-logs/menubar.log` for `accessibility trusted`; remove and re-add JARVISMenuBar once |
+| "Nothing transcribed" after speaking | system input volume too low, or the dev server is down | raise it: `osascript -e 'set volume input volume 80'`; `curl 127.0.0.1:4173/api/transcribe` |
+| Menu bar can't reach the app | dev server on a different port | the app and the verifier both expect `127.0.0.1:4173`; `bun run dev` now serves that port |
+| Wake word shows "off" while listening | stale menu state (fixed) | update the menu-bar build |
+| Dictation works but the app says the helper is missing | wrong helper path (fixed) | rebuild with `native/jarvis-menubar/build.command` |
 | Voice is silent | XTTS server not running | `python xtts_server.py`; text still appears and is revealed immediately |
 | Meeting transcript empty | whisper/model missing | check `WHISPER_BIN` and `models/ggml-small.en.bin`; `bun run verify` reports it |

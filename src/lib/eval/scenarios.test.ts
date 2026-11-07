@@ -424,6 +424,7 @@ describe("scenario: screen contents are data, never commands", () => {
   it("ships only read-only hands tools — no action verb exists", () => {
     const handsTools = Object.keys(TOOLS).filter((t) => t.startsWith("hands_"));
     expect(handsTools.sort()).toEqual([
+      "hands_crop",
       "hands_list_windows",
       "hands_look",
       "hands_read_focused",
