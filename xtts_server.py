@@ -19,6 +19,7 @@ import sys
 import io
 import json
 import time
+import wave
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -50,11 +51,72 @@ ALLOWED_PARAMS = {
 }
 
 
+def _read_wav(path: str, sampling_rate: int):
+    """Decode a PCM WAV into a mono float tensor at `sampling_rate`.
+
+    torchaudio >= 2.9 hands decoding to torchcodec, whose bundled dylib links
+    against FFmpeg 4 sonames (libavutil.56, libavcodec.58). A current Homebrew
+    FFmpeg ships 61+, so the loader raised "Could not load this library" and
+    every synthesis failed. The reference voice is a plain WAV, so its samples
+    are read here with the stdlib reader instead of a media backend.
+    """
+    import numpy as np
+    import torch
+    import torchaudio
+
+    with wave.open(str(path), "rb") as handle:
+        channels = handle.getnchannels()
+        width = handle.getsampwidth()
+        rate = handle.getframerate()
+        raw = handle.readframes(handle.getnframes())
+
+    if width == 1:
+        data = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+    elif width == 2:
+        data = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif width == 3:
+        triplets = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        ints = triplets[:, 0] | (triplets[:, 1] << 8) | (triplets[:, 2] << 16)
+        ints = np.where(ints & 0x800000, ints - 0x1000000, ints)
+        data = ints.astype(np.float32) / 8388608.0
+    elif width == 4:
+        data = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+    else:
+        raise ValueError(f"unsupported WAV sample width: {width} bytes")
+
+    audio = torch.from_numpy(data.reshape(-1, channels).T.copy())
+    if audio.size(0) != 1:
+        audio = torch.mean(audio, dim=0, keepdim=True)
+    if rate != sampling_rate:
+        audio = torchaudio.functional.resample(audio, rate, sampling_rate)
+    return audio.clip_(-1, 1)
+
+
+def install_wav_loader():
+    """Route coqui-tts's audio loading through _read_wav (WAV fast path only)."""
+    from TTS.tts.models import xtts as xtts_module
+
+    if getattr(xtts_module, "_jarvis_original_load_audio", None) is None:
+        xtts_module._jarvis_original_load_audio = xtts_module.load_audio
+    original = xtts_module._jarvis_original_load_audio
+
+    def load_audio(audiopath, sampling_rate):
+        try:
+            return _read_wav(audiopath, sampling_rate)
+        except Exception as err:  # non-WAV input keeps the original behaviour
+            print(f"[XTTS] WAV fast path unavailable ({err}) — using torchaudio")
+            return original(audiopath, sampling_rate)
+
+    xtts_module.load_audio = load_audio
+
+
 def load_model():
     """Load the XTTS-v2 model. This takes a while on first run."""
     global tts_model
     try:
         from TTS.api import TTS as TTSApi
+
+        install_wav_loader()
 
         print("[XTTS] Loading XTTS-v2 model...")
         print("[XTTS] This may take 30-60 seconds on first run.")

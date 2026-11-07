@@ -402,6 +402,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
     private var meetingURL: URL?
 
     private var wakeEnabled = false
+    /// The user's intent, which outlives a recording: dictation and meetings
+    /// stop the listener, and it re-arms when they finish.
+    private var wakeWanted = false
     // Privacy: keep the always-listening audio on-device when the model exists.
     private var wakePrefersOnDevice = true
     private var wakeTask: SFSpeechRecognitionTask?
@@ -445,7 +448,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
         menu.addItem(dictate)
 
         let wake = NSMenuItem(
-            title: wakeEnabled ? "Wake word “Jarvis”: on" : "Wake word “Jarvis”: off",
+            title: wakeWanted ? "Wake word “Jarvis”: on" : "Wake word “Jarvis”: off",
             action: #selector(toggleWakeWord),
             keyEquivalent: ""
         )
@@ -476,6 +479,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
         meetings.target = self
         menu.addItem(meetings)
 
+        let dictations = NSMenuItem(title: "Open dictation folder", action: #selector(openDictations), keyEquivalent: "")
+        dictations.target = self
+        menu.addItem(dictations)
+
         let permissions = NSMenuItem(title: "Check permissions", action: #selector(checkPermissions), keyEquivalent: "")
         permissions.target = self
         menu.addItem(permissions)
@@ -494,6 +501,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    @objc private func openDictations() {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Documents/JARVIS/dictation", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(dir)
     }
 
     @objc private func openMeetings() {
@@ -574,9 +588,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
         self.recorder = nil
         isDictating = false
         rebuildMenu()
+        rearmWakeWord()
 
         transcribe(fileURL: url) { text in
             try? FileManager.default.removeItem(at: url)
+            if let text { self.autosaveDictation(text) }
             guard let text else {
                 self.showError("Nothing transcribed", "The local speech-to-text returned no text. Check that whisper.cpp and the model file are installed (SETUP.md).")
                 return
@@ -595,6 +611,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
         }
     }
 
+    /// Append the transcript to today's notes file, so a dictation is never
+    /// lost when there is no text field to type into (or typing is refused).
+    private func autosaveDictation(_ text: String) {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Documents/JARVIS/dictation", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let day = DateFormatter()
+        day.dateFormat = "yyyy-MM-dd"
+        let clock = DateFormatter()
+        clock.dateFormat = "HH:mm"
+        let url = dir.appendingPathComponent("\(day.string(from: Date())).md")
+        let line = "- \(clock.string(from: Date())) \(text)\n"
+
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(line.utf8))
+        } else {
+            let header = "# JARVIS dictation — \(day.string(from: Date()))\n\n"
+            try? (header + line).write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
     @objc private func toggleMeeting() {
         if isRecordingMeeting {
             guard let recorder, let url = meetingURL else { return }
@@ -602,6 +642,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
             self.recorder = nil
             isRecordingMeeting = false
             rebuildMenu()
+            rearmWakeWord()
             transcribe(fileURL: url) { text in
                 let body = "# Meeting \(ISO8601DateFormatter().string(from: Date()))\n\n"
                     + (text ?? "_(no speech detected)_") + "\n"
@@ -630,12 +671,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SFSpeechRecognizerDele
     // ── Wake word ──────────────────────────────────────────────────────────
 
     @objc private func toggleWakeWord() {
-        if wakeEnabled {
+        if wakeWanted {
+            wakeWanted = false
             stopWakeWord()
-        } else {
-            beginWakeWord()
+            rebuildMenu()
+            return
         }
+        wakeWanted = true
+        beginWakeWord()
         rebuildMenu()
+    }
+
+    /// Restart listening after a recording without overriding an explicit off.
+    private func rearmWakeWord() {
+        guard wakeWanted, !wakeEnabled, !isDictating, !isRecordingMeeting else { return }
+        beginWakeWord()
     }
 
     private func beginWakeWord() {

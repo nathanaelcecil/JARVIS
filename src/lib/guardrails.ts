@@ -210,6 +210,7 @@ export function toolPermissionCategory(toolName: string): string {
     hands_look: "hands.look",
     hands_read_screen: "hands.read_screen",
     hands_crop: "hands.crop",
+    ask_user: "ui.pick",
     control_map: "control.map",
     control_wait: "control.wait",
     control_scroll_to: "control.scroll_to",

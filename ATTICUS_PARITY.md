@@ -56,7 +56,7 @@ Legend: ✅ done · 🟡 partial · ⬜ not started. Phase = when it lands.
 | "Allow" cards per action class (Click this? Press this key? …) | `ConfirmAction.tsx` + `formatConfirmArgs` per-tool rendering                | ✅            |
 | Task-scoped approval ("always allow for this task")            | Confirm card offers "Always allow for this task"; the scope is one chat turn (`task-approvals.ts`), cleared when the stream ends, and every allowed call still gets its own single-use approval token | ✅ |
 | Hard denials (`rm`, `sudo`, `git push`, …)                     | `never` tier in `guardrails.ts` + argv-only tools                           | ✅            |
-| Agent asks the user to choose (`--pick` card)                  | —                                                                           | ⬜ Phase 4    |
+| Agent asks the user to choose (`--pick` card)                  | `ask_user(prompt, options[2-4])` pauses the turn, renders a card, and returns `{choice}` / `{cancelled}` / `{expired}`; POST `/api/pick` resolves it, and aborting the turn releases it immediately | ✅ |
 | Bearer secret is not enough for actions                        | HMAC approval token, args-bound, single-use                                 | ✅ (stronger) |
 
 ## 4. Agent loop, tasks, persistence

@@ -673,6 +673,27 @@ export class EscalatingProvider implements AIProvider {
     return model !== this.workModel && this.workModel.trim().length > 0;
   }
 
+  /**
+   * Must stay transparent: callers feature-detect chatStream/parseMetadata, so
+   * hiding them behind this wrapper silently disabled token streaming (whole
+   * replies arrived at once) and dropped every tool call in the metadata block.
+   */
+  chatStream(params: {
+    messages: ChatMessage[];
+    model: string;
+    signal?: AbortSignal;
+  }): AsyncGenerator<string, void, unknown> {
+    if (!this.inner.chatStream) throw new Error("Provider does not support streaming");
+    return this.inner.chatStream(params);
+  }
+
+  parseMetadata(raw: string): { text: string; metadata?: ResponseMetadata } {
+    const inner = this.inner as AIProvider & {
+      parseMetadata?: (raw: string) => { text: string; metadata?: ResponseMetadata };
+    };
+    return inner.parseMetadata ? inner.parseMetadata(raw) : { text: raw.trim() };
+  }
+
   async chat(params: {
     messages: ChatMessage[];
     model: string;

@@ -36,6 +36,9 @@ export const TOOL_TIERS: Record<string, ToolTier> = {
   hands_read_screen: "auto",
   hands_crop: "auto",
 
+  // Answers in the chat UI, never touches the Mac: the card IS the approval.
+  ask_user: "auto",
+
   // Hands v2 — computer CONTROL. These act on the user's Mac, so every one is
   // confirm-tier: the bearer secret alone is not enough, a call needs an
   // approval token minted after a real approval. `control_map` and

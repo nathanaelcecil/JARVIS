@@ -20,6 +20,7 @@ import { supabaseAdmin } from "../../lib/supabase-server";
 import { isKillSwitchActive, logActivity } from "../../lib/guardrails";
 import { authorizeToolCall } from "../../lib/tool-authorization";
 import { clearTaskApprovals } from "../../lib/task-approvals";
+import { cancelPick, mintPickId, registerPick } from "../../lib/picks";
 import { routeRequest } from "../../lib/ai/router";
 import { registerTask, updateTaskStatus, cleanupOldTasks } from "../../lib/ai/task-registry";
 import { routeToolCall } from "../../lib/mcp/registry";
@@ -1088,6 +1089,41 @@ export const Route = createFileRoute("/api/stream")({
                 if (toolCalls && Array.isArray(toolCalls) && toolCalls.length > 0) {
                   for (const tc of toolCalls) {
                     if (signal.aborted) break;
+
+                    // ask_user is answered in the UI, not by the tool agent:
+                    // pause this turn until the card comes back.
+                    if (tc.tool === "ask_user") {
+                      const prompt =
+                        typeof tc.args?.["prompt"] === "string" ? tc.args["prompt"] : "";
+                      const options = Array.isArray(tc.args?.["options"])
+                        ? (tc.args["options"] as unknown[]).filter(
+                            (o): o is string => typeof o === "string" && o.trim().length > 0,
+                          )
+                        : [];
+                      if (prompt.trim().length === 0 || options.length === 0) {
+                        toolResults.push({
+                          tool: "ask_user",
+                          result: {
+                            error: "invalid_arguments",
+                            message: "prompt and non-empty options are required",
+                          },
+                        });
+                        continue;
+                      }
+
+                      const pickId = mintPickId();
+                      // Aborting mid-card must release the turn immediately
+                      // instead of parking it for the 3-minute timeout.
+                      const onAbort = () => cancelPick(pickId);
+                      signal.addEventListener("abort", onAbort, { once: true });
+                      write(sseEvent("pick_request", { pickId, prompt, options }));
+                      const outcome = await registerPick({ prompt, options, pickId });
+                      signal.removeEventListener("abort", onAbort);
+                      if (signal.aborted) break;
+                      toolResults.push({ tool: "ask_user", result: outcome });
+                      write(sseEvent("tool_result", { tool: "ask_user", result: outcome }));
+                      continue;
+                    }
 
                     const auth = await authorizeToolCall({
                       tool: tc.tool,

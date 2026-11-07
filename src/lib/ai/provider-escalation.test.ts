@@ -83,3 +83,38 @@ describe("EscalatingProvider", () => {
     );
   });
 });
+
+describe("EscalatingProvider transparency", () => {
+  // Regression: hiding chatStream made replies arrive as one blob (no
+  // streaming), and hiding parseMetadata dropped every tool call.
+  function streamingInner(tokens: string[], meta: string) {
+    return {
+      async chat() {
+        return { content: meta };
+      },
+      async *chatStream() {
+        for (const token of tokens) yield token;
+      },
+      parseMetadata(raw: string) {
+        return { text: raw.replace(/---METADATA---[\s\S]*$/, "").trim(), metadata: { tools: [] } };
+      },
+    } as unknown as AIProvider;
+  }
+
+  it("streams through the wrapper token by token", async () => {
+    const provider = new EscalatingProvider(streamingInner(["a", "b", "c"], ""), "work:model");
+    const seen: string[] = [];
+    for await (const token of provider.chatStream?.({ messages, model: "cheap:model" }) ?? []) {
+      seen.push(token);
+    }
+    expect(seen).toEqual(["a", "b", "c"]);
+  });
+
+  it("still parses the metadata block", () => {
+    const provider = new EscalatingProvider(streamingInner([], "hi---METADATA---{}"), "work:model");
+    expect(provider.parseMetadata('hi---METADATA---{"tools":[]}')).toMatchObject({
+      text: "hi",
+      metadata: { tools: [] },
+    });
+  });
+});

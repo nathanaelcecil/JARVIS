@@ -48,6 +48,7 @@ observation.
 | Read windows and text | `hands_list_windows`, `hands_read_window`, `hands_read_focused` | auto | "what windows are open?" |
 | OCR a screen | `hands_read_screen`, `hands_look` | auto | "read my screen" |
 | Crop a region (point and ask) | `hands_crop(x, y, width, height)` | auto | "what does this say?" while pointing at a region |
+| Ask you to choose | `ask_user(prompt, options[])` | auto | "ask me which file to open" — a card appears and the reply waits for your pick |
 | Control map | `control_map` | auto | "what's clickable in Chrome?" |
 | Click | `control_click` | confirm | "click Save" |
 | Type | `control_type` | confirm | "type 'done' into the search field" |
@@ -69,7 +70,10 @@ own single-use token. A plain Approve stays single-use as before.
 
 When a cheap route comes back empty or fails, the non-streamed completion is
 retried once on the work model (`OLLAMA_ESCALATION_MODEL`, default: the smart
-model); streams are never re-run, so output is not duplicated.
+model); streams are never re-run, so output is not duplicated. The wrapper
+stays transparent: `chatStream` and `parseMetadata` are delegated, because
+hiding them made replies arrive as one late blob and silently dropped tool
+calls (both pinned by `provider-escalation.test.ts`).
 
 Test (real, non-destructive):
 
@@ -183,6 +187,10 @@ open native/jarvis-menubar/bin/JARVISMenuBar.app
 If Accessibility is missing, dictation copies the text to your clipboard and says
 so instead of silently losing it.
 
+Every dictation is also appended to `~/Documents/JARVIS/dictation/YYYY-MM-DD.md`
+(time + text) as soon as it is transcribed, so nothing is lost when there is no
+text field to type into. Menu → **Open dictation folder** takes you there.
+
 The app logs to `/tmp/jarvis-logs/menubar.log` — including
 `accessibility trusted = true|false` at startup, which is the fastest way to
 check the grant. `build.command` signs the bundle by **identifier**
@@ -247,5 +255,8 @@ Test the two Phase-4 behaviours:
 | Menu bar can't reach the app | dev server on a different port | the app and the verifier both expect `127.0.0.1:4173`; `bun run dev` now serves that port |
 | Wake word shows "off" while listening | stale menu state (fixed) | update the menu-bar build |
 | Dictation works but the app says the helper is missing | wrong helper path (fixed) | rebuild with `native/jarvis-menubar/build.command` |
-| Voice is silent | XTTS server not running | `python xtts_server.py`; text still appears and is revealed immediately |
+| Voice is silent | XTTS server not running | `.xtts-venv/bin/python -u xtts_server.py`; `curl 127.0.0.1:8080/health` → `{"status":"ok"}` |
+| Voice silent even though the server runs | its audio library wants FFmpeg 4 sonames (`libavutil.56`) while Homebrew ships 61+, so `/speak` returned 500 | fixed: `xtts_server.py` decodes the reference WAV itself; a synthesis log line `[XTTS] 45 chars -> … bytes` means it works |
+| Wake word shows on but nothing happens | the listener never re-armed after a dictation (fixed) | rebuild `native/jarvis-menubar/build.command`; the menu now stays "on" and returns to listening when a recording ends |
+| Replies arrive all at once, and tool calls do nothing | a provider wrapper hid `chatStream`/`parseMetadata` (fixed) | expect `event: token` lines and a visible tool round-trip |
 | Meeting transcript empty | whisper/model missing | check `WHISPER_BIN` and `models/ggml-small.en.bin`; `bun run verify` reports it |

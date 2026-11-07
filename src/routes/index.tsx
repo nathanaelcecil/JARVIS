@@ -6,6 +6,7 @@ import { ChatInput } from "@/components/ChatInput";
 import { MessageList, type ChatMessage, type MessageListHandle } from "@/components/MessageList";
 import { PatternProposal } from "@/components/PatternProposal";
 import { ConfirmAction } from "@/components/ConfirmAction";
+import { PickCard } from "@/components/PickCard";
 import { StatusOverlay } from "@/components/StatusOverlay";
 import { CameraPanel } from "@/components/CameraPanel";
 import { killSwitch } from "@/functions/kill";
@@ -98,6 +99,11 @@ function Index() {
   const [micActive, setMicActive] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | undefined>();
+  const [pendingPick, setPendingPick] = useState<{
+    pickId: string;
+    prompt: string;
+    options: string[];
+  } | null>(null);
   const [pendingPattern, setPendingPattern] = useState<{
     description: string;
     question: string;
@@ -608,6 +614,19 @@ function Index() {
                   });
                   break;
 
+                case "pick_request":
+                  // ask_user pauses the turn until this card is answered.
+                  setPendingPick({
+                    pickId: parsed.pickId || "",
+                    prompt: typeof parsed.prompt === "string" ? parsed.prompt : "",
+                    options: Array.isArray(parsed.options)
+                      ? (parsed.options as unknown[]).filter(
+                          (o): o is string => typeof o === "string" && o.length > 0,
+                        )
+                      : [],
+                  });
+                  break;
+
                 case "tool_result":
                   // Tool result status — separate line, never the message
                   setStreamStatus(
@@ -627,6 +646,7 @@ function Index() {
                   // server has already resolved or expired — close it so a
                   // late click can't be mistaken for a denial.
                   setPendingConfirm(null);
+                  setPendingPick(null);
                   setStreamStatus(null);
 
                   // Final-flush audit: if tokens were missed client-side
@@ -766,6 +786,28 @@ function Index() {
     setPendingPattern(null);
   }, [pendingPattern]);
 
+  const handlePick = useCallback(
+    async (choice: string | null) => {
+      const pick = pendingPick;
+      if (!pick) return;
+      setPendingPick(null);
+      try {
+        await fetch("/api/pick", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            choice === null
+              ? { pickId: pick.pickId, cancel: true }
+              : { pickId: pick.pickId, choice },
+          ),
+        });
+      } catch {
+        // The turn also times out on its own — never block the UI on this.
+      }
+    },
+    [pendingPick],
+  );
+
   const handleDismissPattern = useCallback(() => {
     setPendingPattern(null);
   }, []);
@@ -903,6 +945,17 @@ function Index() {
               {...(pendingConfirm.taskId
                 ? { onApproveForTask: () => handleConfirm(true, "task") }
                 : {})}
+            />
+          </div>
+        )}
+
+        {pendingPick && (
+          <div className="mb-2">
+            <PickCard
+              prompt={pendingPick.prompt}
+              options={pendingPick.options}
+              onPick={(choice) => void handlePick(choice)}
+              onDismiss={() => void handlePick(null)}
             />
           </div>
         )}
