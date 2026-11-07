@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAgentRouteImport } from './routes/api/agent'
 import { Route as ApiConfirmRouteImport } from './routes/api/confirm'
+import { Route as ApiPickRouteImport } from './routes/api/pick'
 import { Route as ApiProactiveRouteImport } from './routes/api/proactive'
 import { Route as ApiStreamRouteImport } from './routes/api/stream'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
@@ -31,6 +32,11 @@ const ApiAgentRoute = ApiAgentRouteImport.update({
 const ApiConfirmRoute = ApiConfirmRouteImport.update({
   id: '/api/confirm',
   path: '/api/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPickRoute = ApiPickRouteImport.update({
+  id: '/api/pick',
+  path: '/api/pick',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiProactiveRoute = ApiProactiveRouteImport.update({
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/confirm': typeof ApiConfirmRoute
+  '/api/pick': typeof ApiPickRoute
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/confirm': typeof ApiConfirmRoute
+  '/api/pick': typeof ApiPickRoute
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/api/agent': typeof ApiAgentRoute
   '/api/confirm': typeof ApiConfirmRoute
+  '/api/pick': typeof ApiPickRoute
   '/api/proactive': typeof ApiProactiveRoute
   '/api/stream': typeof ApiStreamRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/agent'
     | '/api/confirm'
+    | '/api/pick'
     | '/api/proactive'
     | '/api/stream'
     | '/api/transcribe'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/agent'
     | '/api/confirm'
+    | '/api/pick'
     | '/api/proactive'
     | '/api/stream'
     | '/api/transcribe'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/agent'
     | '/api/confirm'
+    | '/api/pick'
     | '/api/proactive'
     | '/api/stream'
     | '/api/transcribe'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiAgentRoute: typeof ApiAgentRoute
   ApiConfirmRoute: typeof ApiConfirmRoute
+  ApiPickRoute: typeof ApiPickRoute
   ApiProactiveRoute: typeof ApiProactiveRoute
   ApiStreamRoute: typeof ApiStreamRoute
   ApiTranscribeRoute: typeof ApiTranscribeRoute
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/api/confirm'
       fullPath: '/api/confirm'
       preLoaderRoute: typeof ApiConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/pick': {
+      id: '/api/pick'
+      path: '/api/pick'
+      fullPath: '/api/pick'
+      preLoaderRoute: typeof ApiPickRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/proactive': {
@@ -210,6 +230,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiAgentRoute: ApiAgentRoute,
   ApiConfirmRoute: ApiConfirmRoute,
+  ApiPickRoute: ApiPickRoute,
   ApiProactiveRoute: ApiProactiveRoute,
   ApiStreamRoute: ApiStreamRoute,
   ApiTranscribeRoute: ApiTranscribeRoute,
